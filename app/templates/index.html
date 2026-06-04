@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>智能对话智能体</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">LangChain · Qwen · Chroma · FastAPI</p>
+      <h1>智能对话智能体</h1>
+      <p class="hero-copy">一个用于 RAG 知识库问答的最小应用骨架，先跑通界面、聊天接口与文件上传入口。</p>
+    </section>
+
+    <section class="workspace" aria-label="对话机器人和知识库工作区">
+      <article class="panel chat-panel">
+        <div class="panel-header">
+          <div>
+            <p class="label">对话机器人</p>
+            <h2>Chat Console</h2>
+          </div>
+          <span class="status-dot">在线</span>
+        </div>
+
+        <div id="chatMessages" class="chat-messages" aria-live="polite">
+          <div class="message bot">
+            <span class="message-role">Bot</span>
+            <p>你好，我是你的 RAG 对话智能体。上传知识库文件后，后续可以接入检索增强问答。</p>
+          </div>
+        </div>
+
+        <form id="chatForm" class="chat-form">
+          <label class="sr-only" for="messageInput">输入消息</label>
+          <input id="messageInput" name="message" type="text" placeholder="输入你的问题，例如：总结知识库内容" autocomplete="off" required>
+          <button type="submit">发送</button>
+        </form>
+      </article>
+
+      <aside class="panel knowledge-panel">
+        <div class="panel-header">
+          <div>
+            <p class="label">RAG 知识库</p>
+            <h2>Knowledge Base</h2>
+          </div>
+        </div>
+
+        <p class="knowledge-copy">选择文件上传到知识库。当前版本会接收文件并返回状态，下一步可接入文档切分、Embedding 和 Chroma 入库。</p>
+
+        <form id="uploadForm" class="upload-box">
+          <label for="knowledgeFile" class="file-picker">
+            <span class="file-icon">↑</span>
+            <strong>选择文件上传到知识库</strong>
+            <small id="fileName">支持 txt、pdf 等后续可解析文件</small>
+          </label>
+          <input id="knowledgeFile" name="file" type="file" required>
+          <button type="submit">上传文件</button>
+        </form>
+
+        <div id="uploadResult" class="upload-result" role="status"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
