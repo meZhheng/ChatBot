@@ -100,6 +100,21 @@ h1 {
   line-height: 1.8;
 }
 
+.temp-entry {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: 999px;
+  color: var(--warning);
+  background: rgba(255, 209, 102, 0.08);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
@@ -243,6 +258,154 @@ h1 {
   line-height: 1.75;
 }
 
+.chunks-panel,
+.retrieve-panel {
+  margin: 0 26px 26px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(4, 11, 18, 0.5);
+}
+
+.chunks-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.chunks-status {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.chunks-list,
+.retrieve-results {
+  display: grid;
+  gap: 12px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.chunk-card {
+  padding: 14px 16px;
+  border: 1px solid rgba(128, 255, 219, 0.14);
+  border-radius: 18px;
+  background: rgba(128, 255, 219, 0.06);
+}
+
+.chunk-text {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
+}
+
+.chunk-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chunk-meta div {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.chunk-meta dt {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chunk-meta dd,
+.retrieve-meta dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.retrieve-panel-header {
+  margin-bottom: 12px;
+}
+
+.retrieve-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.retrieve-form label {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.retrieve-form textarea,
+.retrieve-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: var(--text);
+  background: rgba(4, 11, 18, 0.76);
+  outline: none;
+}
+
+.retrieve-form textarea:focus,
+.retrieve-form input:focus {
+  border-color: rgba(128, 255, 219, 0.7);
+  box-shadow: 0 0 0 4px rgba(128, 255, 219, 0.12);
+}
+
+.retrieve-form button {
+  min-height: 48px;
+}
+
+.retrieve-status {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.retrieve-card {
+  padding: 14px 16px;
+  border: 1px solid rgba(69, 216, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(69, 216, 255, 0.08);
+}
+
+.retrieve-text {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
+}
+
+.retrieve-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.retrieve-meta div {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.retrieve-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
 .upload-box {
   position: relative;
   z-index: 1;
@@ -323,6 +486,16 @@ h1 {
   }
 
   .chat-form button {
+    min-height: 48px;
+  }
+
+  .chunks-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .chunks-panel-header button {
+    width: 100%;
     min-height: 48px;
   }
 }

@@ -1,18 +1,20 @@
 import hashlib
+from logging import config
 import sqlite3
+from pathlib import Path
+from datetime import datetime
+from langchain_chroma import Chroma
+from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from .config import MemoryConfig
 
-def get_md5_hash(text: str) -> str:
-    return hashlib.md5(text.encode()).hexdigest()
-
-
-def check_md5_hash(text: str, hash_value: str) -> bool:
-    return get_md5_hash(text) == hash_value
-
-
-class KnowledgeBaseService:
-    def __init__(self, sqlite: sqlite3.Connection):
-        self.sqlite = sqlite
+class TextHashService:
+    def __init__(self, sqlite_path: str | Path):
+        self.sqlite_path = Path(sqlite_path)
+        if self.sqlite_path != Path(":memory:"):
+            self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+        self.sqlite = sqlite3.connect(self.sqlite_path, check_same_thread=False)
         self.sqlite.row_factory = sqlite3.Row
         self.ensure_schema()
 
@@ -21,65 +23,103 @@ class KnowledgeBaseService:
             """
             CREATE TABLE IF NOT EXISTS processed_text_hashes (
                 content_hash TEXT PRIMARY KEY,
-                source_name TEXT NOT NULL,
-                content_type TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
         self.sqlite.commit()
 
-    def has_text(self, text: str) -> bool:
-        return self.has_hash(get_md5_hash(text))
+    def get_md5_hash(self, text: str) -> str:
+        return hashlib.md5(text.encode()).hexdigest()
 
-    def has_hash(self, content_hash: str) -> bool:
-        row = self.sqlite.execute(
+    def check_md5_hash(self, text: str) -> bool:
+        content_hash = self.get_md5_hash(text)
+        cursor = self.sqlite.execute(
             """
-            SELECT 1
-            FROM processed_text_hashes
-            WHERE content_hash = ?
+            INSERT INTO processed_text_hashes (content_hash)
+            VALUES (?)
+            ON CONFLICT(content_hash) DO NOTHING
             """,
             (content_hash,),
-        ).fetchone()
-        return row is not None
+        )
+        self.sqlite.commit()
+        return cursor.rowcount == 1
 
-    def record_text_hash(
-        self,
-        *,
-        text: str,
-        source_name: str,
-        content_type: str | None,
-    ) -> dict:
-        content_hash = get_md5_hash(text)
-        is_duplicate = self.has_hash(content_hash)
-
-        if not is_duplicate:
-            self.sqlite.execute(
-                """
-                INSERT INTO processed_text_hashes (
-                    content_hash,
-                    source_name,
-                    content_type
-                )
-                VALUES (?, ?, ?)
-                """,
-                (content_hash, source_name, content_type),
-            )
-            self.sqlite.commit()
-
-        return {
-            "content_hash": content_hash,
-            "source_name": source_name,
-            "content_type": content_type,
-            "is_duplicate": is_duplicate,
-        }
-
-    def list_md5_records(self) -> list[dict]:
+    def list_md5_hashes(self) -> list[str]:
         rows = self.sqlite.execute(
             """
-            SELECT content_hash, source_name, content_type
+            SELECT content_hash, created_at
             FROM processed_text_hashes
             ORDER BY created_at, content_hash
             """
         ).fetchall()
-        return [dict(row) for row in rows]
+        return [row["content_hash"] for row in rows]
+
+    def close(self):
+        self.sqlite.close()
+
+
+
+class KnowledgeBaseService:
+    def __init__(self, hash_service: TextHashService):
+        self.config = MemoryConfig()
+        self.hash_service = hash_service
+        self.vector_store = Chroma(
+            collection_name=self.config.collection_name,
+            embedding_function=DashScopeEmbeddings(
+                model=self.config.qwen_embedding_model, 
+                dashscope_api_key=self.config.qwen_api_key
+            ),
+            persist_directory=self.config.chroma_persist_dir,
+        )
+        self.spliter = RecursiveCharacterTextSplitter(
+            chunk_size=self.config.chunk_size,
+            chunk_overlap=self.config.chunk_overlap,
+            separators=self.config.separators,
+            length_function=len,
+        )
+
+    def update_by_text(self, text: str, filename: str) -> bool:
+        if not self.hash_service.check_md5_hash(text):
+            return False
+
+        if len(text) > self.config.min_split_length:
+            chunks = self.spliter.split_text(text)
+        else:
+            chunks = [text]
+
+        metadatas = [{
+            "source": filename,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "operator": "admin"
+        }] * len(chunks)
+
+        self.vector_store.add_texts(
+            texts=chunks,
+            metadatas=metadatas
+        )
+
+        return True
+
+    def list_chunks(self) -> list[dict]:
+        result = self.vector_store.get(include=["documents", "metadatas"])
+        ids = result.get("ids") or []
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+
+        chunks: list[dict] = []
+        for chunk_id, text, metadata in zip(ids, documents, metadatas):
+            chunks.append(
+                {
+                    "id": chunk_id,
+                    "text": text,
+                    "metadata": metadata or {},
+                }
+            )
+
+        return chunks
+
+    def get_retriever(self, top_k: int = 3):
+        return self.vector_store.as_retriever(
+            search_kwargs={"k": top_k}
+        )
