@@ -76,7 +76,7 @@ CHROMA_PERSIST_DIR=./data/chroma
 ## 启动示例
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ```
 
 在当前 Windows + Conda 环境中，可以使用：
