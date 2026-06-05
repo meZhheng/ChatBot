@@ -3,6 +3,7 @@ uvicorn[standard]
 jinja2
 python-dotenv
 pydantic-settings
+pyyaml
 
 langchain
 langchain-core
@@ -10,6 +11,7 @@ langchain-community
 langchain-openai
 langchain-text-splitters
 langchain-chroma
+langchain-tavily
 
 dashscope
 chromadb

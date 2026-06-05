@@ -8,11 +8,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from memory.knowledge_base import KnowledgeBaseService, TextHashService
-from memory.rag import RagService
+from agent.rag.retriever import KnowledgeBaseService, TextHashService
+from agent.rag.rag_service import RagService
+from agent.utils.config_handler import MemoryConfig
 
 
-DEFAULT_SQLITE_PATH = Path("data/sqlite/knowledge_base.sqlite")
+DEFAULT_SQLITE_PATH = Path(MemoryConfig().sqlite_path)
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -147,7 +148,7 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
 
     @app.post("/api/admin/rag/retrieve", response_model=RetrieveResponse)
     def admin_rag_retrieve(payload: RetrieveRequest):
-        results = app.state.knowledge_base.retrive(payload.query, top_k=payload.top_k)
+        results = app.state.knowledge_base.retrieve(payload.query, top_k=payload.top_k)
         return {"query": payload.query, "top_k": payload.top_k, "results": results}
 
     return app

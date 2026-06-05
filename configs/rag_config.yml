@@ -1,0 +1,25 @@
+qwen:
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  chat_model: qwen3.6-flash
+  embedding_model: text-embedding-v4
+
+storage:
+  chroma_persist_dir: data/chroma
+  sqlite_path: data/sqlite/knowledge_base.sqlite
+  history_store: memory/chat_history/{session_id}.json
+
+vector_store:
+  collection_name: knowledge_base
+
+text_splitter:
+  chunk_size: 1000
+  chunk_overlap: 200
+  separators:
+    - "\n\n"
+    - "\n"
+    - " "
+    - ""
+  min_split_length: 500
+
+retriever:
+  default_top_k: 3
