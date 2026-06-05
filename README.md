@@ -32,7 +32,8 @@ source .venv/bin/activate
 
 ```env
 DASHSCOPE_API_KEY=your_dashscope_api_key
-QWEN_MODEL=qwen-plus
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_CHAT_MODEL=qwen3.6-flash
 QWEN_EMBEDDING_MODEL=text-embedding-v4
 CHROMA_PERSIST_DIR=./data/chroma
 ```
