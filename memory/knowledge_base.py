@@ -79,6 +79,9 @@ class KnowledgeBaseService:
             length_function=len,
         )
 
+    def check_md5_hash(self, text: str) -> bool:
+        return self.hash_service.check_md5_hash(text)
+
     def update_by_text(self, text: str, filename: str) -> bool:
         if not self.hash_service.check_md5_hash(text):
             return False
@@ -118,6 +121,20 @@ class KnowledgeBaseService:
             )
 
         return chunks
+    
+    def retrieve(self, query: str, top_k: int = 3) -> list[dict]:
+        results = self.vector_store.similarity_search_with_score(query, k=top_k)
+        retrieved = []
+        for doc, score in results:
+            retrieved.append(
+                {
+                    "id": doc.metadata.get("id", ""),
+                    "text": doc.page_content,
+                    "metadata": doc.metadata,
+                    "score": score,
+                }
+            )
+        return retrieved
 
     def get_retriever(self, top_k: int = 3):
         return self.vector_store.as_retriever(

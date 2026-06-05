@@ -23,3 +23,6 @@ class MemoryConfig:
         self.chunk_overlap = 200
         self.separators = ["\n\n", "\n", " ", ""]
         self.min_split_length = 500
+
+        # memory
+        self.history_store = "memory/chat_history/{session_id}.json"

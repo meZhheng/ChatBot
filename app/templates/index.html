@@ -25,17 +25,23 @@
           <span class="status-dot">在线</span>
         </div>
 
-        <div id="chatMessages" class="chat-messages" aria-live="polite">
-          <div class="message bot">
-            <span class="message-role">Bot</span>
-            <p>你好，我是你的 RAG 对话智能体。请直接发送问题，我会先用占位回复承接后续能力。</p>
+        <div class="chat-toolbar" aria-label="会话管理">
+          <div>
+            <span class="toolbar-kicker">当前会话</span>
+            <strong id="sessionLabel">载入中</strong>
+          </div>
+          <div class="toolbar-actions">
+            <button id="newSessionButton" class="ghost-button" type="button">新会话</button>
+            <button id="clearChatButton" class="ghost-button" type="button">清空显示</button>
           </div>
         </div>
+
+        <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
 
         <form id="chatForm" class="chat-form">
           <label class="sr-only" for="messageInput">输入消息</label>
           <input id="messageInput" name="message" type="text" placeholder="输入你的问题，例如：总结知识库内容" autocomplete="off" required>
-          <button type="submit">发送</button>
+          <button id="sendButton" type="submit">发送</button>
         </form>
       </article>
     </section>

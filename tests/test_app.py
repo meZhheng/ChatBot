@@ -165,14 +165,67 @@ def test_admin_rag_api_exposes_chunks_and_retrieve_results():
     assert fake_knowledge_base.retrieve_calls == [("A股市场什么时候成立的？", 3)]
 
 
-def test_chat_endpoint_returns_placeholder_bot_reply():
+class FakeRagChain:
+    def __init__(self):
+        self.stream_calls: list[tuple[dict, dict]] = []
+
+    def stream(self, inputs: dict, config: dict):
+        self.stream_calls.append((inputs, config))
+        yield "第一段"
+        yield "第二段"
+
+
+class FakeRagService:
+    def __init__(self):
+        self.chain = FakeRagChain()
+
+
+def test_chat_endpoint_streams_rag_reply():
+    fake_rag_service = FakeRagService()
+
     with TestClient(create_app()) as client:
-        response = client.post("/api/chat", json={"message": "你好"})
+        client.app.state.rag_service = fake_rag_service
+        response = client.post(
+            "/api/chat",
+            json={"message": "  你好  ", "session_id": "browser-session"},
+        )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "reply": "已收到你的消息：你好。后续会接入 LangChain + 千问 + Chroma 实现 RAG 回复。"
-    }
+    assert response.text == "第一段第二段"
+    assert response.headers["content-type"].startswith("text/plain")
+    assert fake_rag_service.chain.stream_calls == [
+        (
+            {"query": "你好"},
+            {
+                "configurable": {
+                    "session_id": "memory/chat_history/browser-session.json"
+                }
+            },
+        )
+    ]
+
+
+def test_chat_endpoint_sanitizes_session_id_for_history_path():
+    fake_rag_service = FakeRagService()
+
+    with TestClient(create_app()) as client:
+        client.app.state.rag_service = fake_rag_service
+        response = client.post(
+            "/api/chat",
+            json={"message": "你好", "session_id": "../bad/path"},
+        )
+
+    assert response.status_code == 200
+    _, config = fake_rag_service.chain.stream_calls[0]
+    assert config["configurable"]["session_id"] == "memory/chat_history/---bad-path.json"
+
+
+def test_chat_endpoint_rejects_blank_message():
+    with TestClient(create_app()) as client:
+        response = client.post("/api/chat", json={"message": "   "})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "消息不能为空。"}
 
 
 def test_upload_endpoint_records_text_md5_in_sqlite_index(tmp_path: Path):
@@ -193,8 +246,9 @@ def test_upload_endpoint_records_text_md5_in_sqlite_index(tmp_path: Path):
             "content_type": "text/plain",
             "content_hash": expected_hash,
             "is_duplicate": False,
+            "is_new_text": True,
             "status": "indexed",
-            "message": "文本 MD5 已记录，后续可写入 Chroma 向量库。",
+            "message": "文本已写入 Chroma 向量库。",
         }
 
 
@@ -224,6 +278,7 @@ def test_upload_endpoint_detects_duplicate_text_by_md5(tmp_path: Path):
             "content_type": "text/plain",
             "content_hash": expected_hash,
             "is_duplicate": True,
+            "is_new_text": False,
             "status": "duplicate",
             "message": "文本 MD5 已存在，跳过重复入库。",
         }
