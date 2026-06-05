@@ -1,3 +1,6 @@
+const uploadForm = document.querySelector("#uploadForm");
+const uploadInput = document.querySelector("#uploadInput");
+const uploadStatus = document.querySelector("#uploadStatus");
 const refreshChunksButton = document.querySelector("#refreshChunksButton");
 const chunksStatus = document.querySelector("#chunksStatus");
 const chunksList = document.querySelector("#chunksList");
@@ -7,8 +10,51 @@ const topKInput = document.querySelector("#topKInput");
 const retrieveStatus = document.querySelector("#retrieveStatus");
 const retrieveResults = document.querySelector("#retrieveResults");
 
+const hasUploadUi = Boolean(uploadForm && uploadInput && uploadStatus);
 const hasChunksUi = Boolean(refreshChunksButton && chunksStatus && chunksList);
 const hasRetrieveUi = Boolean(retrieveForm && queryInput && topKInput && retrieveStatus && retrieveResults);
+
+async function loadChunks() {
+  if (!hasChunksUi) return;
+
+  chunksStatus.textContent = "正在加载 chunks...";
+
+  try {
+    const response = await fetch("/api/admin/rag/chunks");
+    const data = await response.json();
+    renderChunks(data.chunks);
+  } catch (error) {
+    chunksList.replaceChildren();
+    chunksStatus.textContent = "chunks 加载失败，请点击刷新重试。";
+  }
+}
+
+if (hasUploadUi) {
+  uploadForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const file = uploadInput.files?.[0];
+    if (!file) return;
+
+    uploadStatus.textContent = "正在上传并入库...";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/knowledge/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      uploadStatus.textContent = data.message;
+      uploadForm.reset();
+      await loadChunks();
+    } catch (error) {
+      uploadStatus.textContent = "上传失败，请检查文件后重试。";
+    }
+  });
+}
 
 if (hasChunksUi) {
   function renderChunks(chunks) {

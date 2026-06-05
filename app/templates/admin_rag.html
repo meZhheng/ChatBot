@@ -26,6 +26,23 @@
 
         <p class="knowledge-copy">此页面用于管理知识库调试工具，不会出现在普通用户首页。</p>
 
+        <section class="upload-panel" aria-labelledby="uploadTitle">
+          <div class="panel-header">
+            <div>
+              <p class="label">文档入库</p>
+              <h2 id="uploadTitle">Upload Document</h2>
+            </div>
+          </div>
+
+          <form id="uploadForm" class="upload-form">
+            <label for="uploadInput">选择文档</label>
+            <input id="uploadInput" name="file" type="file" accept=".txt,.md,.html,.json,.csv,.log,.py,.js,.ts" required>
+            <button type="submit">上传并入库</button>
+          </form>
+
+          <p id="uploadStatus" class="upload-status">选择文件后即可上传到 Chroma 知识库。</p>
+        </section>
+
         <section class="chunks-panel" aria-labelledby="chunksTitle">
           <div class="chunks-panel-header">
             <div>
