@@ -10,10 +10,13 @@ from pydantic import BaseModel
 
 from agent.rag.retriever import KnowledgeBaseService, TextHashService
 from agent.rag.rag_service import RagService
-from agent.utils.config_handler import MemoryConfig
+from agent.utils.config_handler import load_rag_config
 
 
-DEFAULT_SQLITE_PATH = Path(MemoryConfig().sqlite_path)
+rag_config = load_rag_config()
+storage_config = rag_config.get("storage", {})
+DEFAULT_SQLITE_PATH = Path(storage_config.get("sqlite_path", "data/sqlite/knowledge_base.sqlite"))
+DEFAULT_HISTORY_STORE = storage_config.get("history_store", "memory/chat_history/{session_id}.json")
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -100,7 +103,7 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
             raise HTTPException(status_code=400, detail="消息不能为空。")
 
         session_id = sanitize_session_id(payload.session_id)
-        history_path = app.state.knowledge_base.config.history_store.format(session_id=session_id)
+        history_path = DEFAULT_HISTORY_STORE.format(session_id=session_id)
         chat_config = {
             "configurable": {
                 "session_id": history_path,

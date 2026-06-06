@@ -26,17 +26,20 @@ pip install -r requirements.txt
 source .venv/bin/activate
 ```
 
-## 环境变量
+## 配置
 
-在项目根目录创建 `.env` 文件：
+在项目根目录创建 `.env` 文件，只保存不能公开的密钥类参数：
 
 ```env
 DASHSCOPE_API_KEY=your_dashscope_api_key
-QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-QWEN_CHAT_MODEL=qwen3.6-flash
-QWEN_EMBEDDING_MODEL=text-embedding-v4
-CHROMA_PERSIST_DIR=./data/chroma
+TAVILY_API_KEY=your_tavily_api_key
 ```
+
+模型、向量库、数据库、工具参数和提示词等公开配置分别维护在：
+
+- `configs/rag_config.yml`：RAG、Chroma、SQLite、embedding 和文本切分配置。
+- `configs/agent_config.yml`：普通 agent 和工具配置。
+- `configs/prompts_config.yml`：RAG 与普通 agent 的提示词配置。
 
 不要把 `.env` 提交到版本控制。
 
@@ -97,6 +100,6 @@ D:\Anaconda\Scripts\activate && conda activate agent && uvicorn app.main:app --r
 
 Chroma 负责后续向量存储和 RAG 检索。SQLite 只用于保存已处理文本的 MD5 索引，避免重复处理相同文本，不保存正文内容。
 
-FastAPI 在应用生命周期启动时创建 SQLite 连接，默认数据库路径是 `data/knowledge_base.sqlite`。连接对象保存在 `app.state.sqlite`，知识库服务对象保存在 `app.state.knowledge_base`。
+FastAPI 在应用生命周期启动时创建 SQLite 连接，默认数据库路径由 `configs/rag_config.yml` 的 `storage.sqlite_path` 配置，当前默认值是 `data/sqlite/knowledge_base.sqlite`。连接对象保存在 `app.state.sqlite`，知识库服务对象保存在 `app.state.knowledge_base`。
 
 API 层通过 `request.app.state.knowledge_base` 使用服务，不在 `memory/knowledge_base.py` 中反向导入 FastAPI app，避免循环导入。

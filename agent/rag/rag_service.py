@@ -7,13 +7,15 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_message_histories.file import FileChatMessageHistory
 
 from agent.rag.retriever import KnowledgeBaseService
-from agent.utils.config_handler import MemoryConfig, load_prompts_config
+from agent.utils.config_handler import get_env, load_prompts_config, load_rag_config
 
 
 class RagService:
     def __init__(self, knowledge_base: KnowledgeBaseService):
         self.knowledge_base = knowledge_base
-        
+
+        rag_config = load_rag_config()
+        qwen_config = rag_config.get("qwen", {})
         prompts_config = load_prompts_config()
         rag_prompts = prompts_config.get("rag", {})
         self.prompt_template = ChatPromptTemplate.from_messages([
@@ -27,13 +29,13 @@ class RagService:
             ("placeholder", "{chat_history}"),
             ("human", rag_prompts.get("human_message", "用户的问题是：{query}")),
         ])
-        
+
         self.chat_model = ChatOpenAI(
-            model=self.knowledge_base.config.qwen_chat_model,
-            api_key=self.knowledge_base.config.qwen_api_key,
-            base_url=self.knowledge_base.config.qwen_base_url,
+            model=qwen_config.get("chat_model", "qwen3.6-flash"),
+            api_key=get_env("DASHSCOPE_API_KEY"),
+            base_url=qwen_config.get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         )
-        
+
         self.chain = self.__get_chain()
 
     def __get_chain(self) -> RunnableWithMessageHistory:
@@ -42,20 +44,20 @@ class RagService:
         def format_documents(documents: list[Document]) -> str:
             if not documents:
                 return "无参考资料。"
-            
+
             formatted = []
             for idx, doc in enumerate(documents):
                 source = doc.metadata.get("source", "未知来源")
                 text = doc.page_content
                 formatted.append(f"参考资料{idx+1}（来源：{source}）：\n{text}")
             return "\n\n".join(formatted)
-    
+
         def print_prompt(prompt: ChatPromptValue) -> dict:
             print("===== Model Inputs =====")
             print(prompt.to_string())
             print("========================")
             return prompt
-        
+
         def format_to_retriever(query: str) -> str:
             return query['query']
 
@@ -65,38 +67,43 @@ class RagService:
                 "context": data['context'],
                 "query": data['query']['query'],
             }
-        
+
         chain = (
             {
                 "query": RunnablePassthrough(),
                 "context": format_to_retriever | retriever | format_documents,
             } | RunnableLambda(format_to_template) | self.prompt_template | print_prompt | self.chat_model | StrOutputParser()
         )
-        
+
         history_chain = RunnableWithMessageHistory(
             chain,
             FileChatMessageHistory,
             input_messages_key="query",
             history_messages_key="chat_history"
         )
-        
+
         return history_chain
+
 
 if __name__ == "__main__":
     from agent.rag.retriever import TextHashService
 
-    config = MemoryConfig()
-    hash_service = TextHashService(config.sqlite_path)
+    rag_config = load_rag_config()
+    storage_config = rag_config.get("storage", {})
+    hash_service = TextHashService(storage_config.get("sqlite_path", "data/sqlite/knowledge_base.sqlite"))
     knowledge_base = KnowledgeBaseService(hash_service)
-    
+
     rag_service = RagService(knowledge_base)
-    
+
     chat_config = {
         "configurable": {
-            "session_id": config.history_store.format(session_id="admin")
+            "session_id": storage_config.get(
+                "history_store",
+                "memory/chat_history/{session_id}.json",
+            ).format(session_id="admin")
         }
     }
-    
+
     query = "你好，我叫张横。"
     response = rag_service.chain.invoke(
         {"query": query},
@@ -104,7 +111,7 @@ if __name__ == "__main__":
     )
     print("用户问题：", query)
     print("Agent回答: ", response)
-    
+
     query = "我叫什么名字？"
     response = rag_service.chain.invoke(
         {"query": query},

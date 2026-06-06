@@ -1,13 +1,14 @@
 import hashlib
-from logging import config
 import sqlite3
 from pathlib import Path
 from datetime import datetime
+
 from langchain_chroma import Chroma
 from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from agent.utils.config_handler import MemoryConfig
+from agent.utils.config_handler import get_env, load_rag_config
+
 
 class TextHashService:
     def __init__(self, sqlite_path: str | Path):
@@ -59,23 +60,34 @@ class TextHashService:
         self.sqlite.close()
 
 
-
 class KnowledgeBaseService:
     def __init__(self, hash_service: TextHashService):
-        self.config = MemoryConfig()
+        rag_config = load_rag_config()
+        storage_config = rag_config.get("storage", {})
+        vector_store_config = rag_config.get("vector_store", {})
+        qwen_config = rag_config.get("qwen", {})
+        splitter_config = rag_config.get("text_splitter", {})
+        retriever_config = rag_config.get("retriever", {})
+
         self.hash_service = hash_service
+        self.min_split_length = splitter_config.get("min_split_length", 500)
+        self.default_top_k = retriever_config.get("default_top_k", 3)
+
+        chroma_persist_dir = storage_config.get("chroma_persist_dir", "data/chroma")
+        Path(chroma_persist_dir).mkdir(parents=True, exist_ok=True)
+
         self.vector_store = Chroma(
-            collection_name=self.config.collection_name,
+            collection_name=vector_store_config.get("collection_name", "knowledge_base"),
             embedding_function=DashScopeEmbeddings(
-                model=self.config.qwen_embedding_model, 
-                dashscope_api_key=self.config.qwen_api_key
+                model=qwen_config.get("embedding_model", "text-embedding-v4"),
+                dashscope_api_key=get_env("DASHSCOPE_API_KEY"),
             ),
-            persist_directory=self.config.chroma_persist_dir,
+            persist_directory=chroma_persist_dir,
         )
         self.spliter = RecursiveCharacterTextSplitter(
-            chunk_size=self.config.chunk_size,
-            chunk_overlap=self.config.chunk_overlap,
-            separators=self.config.separators,
+            chunk_size=splitter_config.get("chunk_size", 1000),
+            chunk_overlap=splitter_config.get("chunk_overlap", 200),
+            separators=splitter_config.get("separators", ["\n\n", "\n", " ", ""]),
             length_function=len,
         )
 
@@ -86,7 +98,7 @@ class KnowledgeBaseService:
         if not self.hash_service.check_md5_hash(text):
             return False
 
-        if len(text) > self.config.min_split_length:
+        if len(text) > self.min_split_length:
             chunks = self.spliter.split_text(text)
         else:
             chunks = [text]
@@ -121,9 +133,9 @@ class KnowledgeBaseService:
             )
 
         return chunks
-    
-    def retrieve(self, query: str, top_k: int = 3) -> list[dict]:
-        results = self.vector_store.similarity_search_with_score(query, k=top_k)
+
+    def retrieve(self, query: str, top_k: int | None = None) -> list[dict]:
+        results = self.vector_store.similarity_search_with_score(query, k=top_k or self.default_top_k)
         retrieved = []
         for doc, score in results:
             retrieved.append(
@@ -138,5 +150,5 @@ class KnowledgeBaseService:
 
     def get_retriever(self, top_k: int | None = None):
         return self.vector_store.as_retriever(
-            search_kwargs={"k": top_k or self.config.default_top_k}
+            search_kwargs={"k": top_k or self.default_top_k}
         )
