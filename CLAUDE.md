@@ -25,7 +25,7 @@
 - 后续新增 Python 依赖时，同步更新 `requirements.txt`。
 - 当前项目 Python 命令使用 Conda 环境 `agent`，在 Claude 的 Git Bash 环境中用 `cmd.exe //C "D:\Anaconda\Scripts\activate && conda activate agent && <command>"` 执行。
 - 优先保持模块职责单一：API 路由、模型封装、向量库、知识库处理、RAG 流程分开维护。
-- 应用级共享资源放在 `app.state`；当前 SQLite 连接为 `app.state.sqlite`，知识库服务为 `app.state.knowledge_base`，服务层不要反向导入 FastAPI app。
+- 应用级共享资源放在 `app.state`；当前 SQLite 连接为 `app.state.sqlite`，RAG 入口服务为 `app.state.rag_service`，服务层不要反向导入 FastAPI app。
 - Chroma 是 RAG 使用的向量数据库；SQLite 用于存储 document/chunk SHA-256 索引、chunk 归属、删除状态和统计信息，不保存原始正文。
 - 对低风险、可逆的本地文件操作可直接执行；涉及删除、覆盖用户改动、联网发布、推送代码、修改共享资源等高风险操作前仍需确认。
 

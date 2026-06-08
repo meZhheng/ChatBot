@@ -8,17 +8,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from agent.rag.chat_chain import RagChatChain
-from agent.rag.knowledge_base import KnowledgeBaseService, KnowledgeIndexStore
 from agent.rag.rag_service import RagService
-from agent.rag.retrieval_pipeline import RetrievalPipeline
 from agent.utils.config_handler import load_rag_config
+
+from agent.bot import AgentService
 
 
 rag_config = load_rag_config()
 storage_config = rag_config.get("storage", {})
 DEFAULT_SQLITE_PATH = Path(storage_config.get("sqlite_path", "data/sqlite/knowledge_base.sqlite"))
-DEFAULT_HISTORY_STORE = storage_config.get("history_store", "memory/chat_history/{session_id}.json")
+DEFAULT_HISTORY_STORE = storage_config.get("history_store", "agent/rag/chat_history/{session_id}.json")
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -140,23 +139,17 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         if db_path.parent != Path(""):
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        knowledge_index_store = KnowledgeIndexStore(db_path)
-        knowledge_base = KnowledgeBaseService(knowledge_index_store)
-        retrieval_pipeline = RetrievalPipeline(knowledge_base)
-        rag_service = RagService(retrieval_pipeline)
-        rag_chat_chain = RagChatChain(retrieval_pipeline)
+        rag_service = RagService(db_path)
+        agent_service = AgentService()
 
-        app.state.sqlite = knowledge_index_store.sqlite
-        app.state.knowledge_index_store = knowledge_index_store
-        app.state.knowledge_base = knowledge_base
-        app.state.retrieval_pipeline = retrieval_pipeline
+        app.state.sqlite = rag_service.sqlite
         app.state.rag_service = rag_service
-        app.state.rag_chat_chain = rag_chat_chain
+        app.state.agent_service = agent_service
 
         try:
             yield
         finally:
-            knowledge_index_store.close()
+            rag_service.close()
 
     app = FastAPI(title="智能对话智能体", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -175,21 +168,13 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         if not query:
             raise HTTPException(status_code=400, detail="消息不能为空。")
 
-        session_id = sanitize_session_id(payload.session_id)
-        history_path = DEFAULT_HISTORY_STORE.format(session_id=session_id)
-        chat_config = {
-            "configurable": {
-                "session_id": history_path,
-            }
-        }
-
         def stream_reply():
             try:
-                for chunk in app.state.rag_chat_chain.chain.stream({"query": query}, chat_config):
+                for chunk in app.state.agent_service.execute_stream(query):
                     if chunk:
                         yield chunk
-            except Exception as exc:
-                yield f"\n\n抱歉，RAG 回复生成失败：{exc}"
+            except Exception as e:
+                yield f"\n\n抱歉，RAG 回复生成失败：{e}"
 
         return StreamingResponse(stream_reply(), media_type="text/plain; charset=utf-8")
 
@@ -202,7 +187,7 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         except UnicodeDecodeError as exc:
             raise HTTPException(status_code=400, detail="当前只支持 UTF-8 文本文档。") from exc
 
-        return app.state.knowledge_base.upload_document(
+        return app.state.rag_service.upload_document(
             content_text,
             file_name,
             content_type=file.content_type,
@@ -211,19 +196,19 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
 
     @app.get("/api/admin/rag/documents", response_model=DocumentListResponse)
     def admin_rag_documents():
-        documents = app.state.knowledge_base.list_documents()
+        documents = app.state.rag_service.list_documents()
         return {"count": len(documents), "documents": documents}
 
     @app.get("/api/admin/rag/documents/{document_id}", response_model=DocumentItem)
     def admin_rag_document(document_id: str):
-        document = app.state.knowledge_base.get_document(document_id)
+        document = app.state.rag_service.get_document(document_id)
         if not document:
             raise HTTPException(status_code=404, detail="document 不存在或已被删除。")
         return document
 
     @app.delete("/api/admin/rag/documents/{document_id}", response_model=DeleteDocumentResponse)
     def admin_delete_rag_document(document_id: str):
-        result = app.state.knowledge_base.delete_document(document_id)
+        result = app.state.rag_service.delete_document(document_id)
         if not result:
             raise HTTPException(status_code=404, detail="document 不存在或已被删除。")
         return result
@@ -233,7 +218,7 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         response_model=DeleteDocumentChunkResponse,
     )
     def admin_delete_rag_document_chunk(document_id: str, chunk_id: str):
-        result = app.state.knowledge_base.delete_document_chunk(document_id, chunk_id)
+        result = app.state.rag_service.delete_document_chunk(document_id, chunk_id)
         if not result:
             raise HTTPException(status_code=404, detail="chunk 不存在、已被删除或不属于该 document。")
         return result

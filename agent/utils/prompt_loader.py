@@ -1,6 +1,6 @@
-from utils.config_handler import load_prompts_config
-from utils.path_tool import get_absolute_path
-from utils.logger_handler import logger
+from agent.utils.config_handler import load_prompts_config
+from agent.utils.path_tool import get_absolute_path
+from agent.utils.logger_handler import logger
 
 prompts_config = load_prompts_config()
 

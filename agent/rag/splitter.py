@@ -1,11 +1,9 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from agent.utils.config_handler import rag_config
-
 
 class DocumentSplitter:
-    def __init__(self):
-        splitter_config = rag_config.get("text_splitter", {})
+    def __init__(self, splitter_config: dict | None = None):
+        splitter_config = splitter_config or {}
 
         self.min_split_length = splitter_config.get("min_split_length", 500)
         self.splitter = RecursiveCharacterTextSplitter(

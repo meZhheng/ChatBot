@@ -3,11 +3,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from langchain_chroma import Chroma
-from langchain_community.embeddings import DashScopeEmbeddings
-
 from agent.rag.splitter import DocumentSplitter
-from agent.utils.config_handler import get_env, load_rag_config
 
 
 class KnowledgeIndexStore:
@@ -71,28 +67,17 @@ class KnowledgeIndexStore:
 
 
 class KnowledgeBaseService:
-    def __init__(self, index_store: KnowledgeIndexStore, document_splitter: DocumentSplitter | None = None):
-        rag_config = load_rag_config()
-        storage_config = rag_config.get("storage", {})
-        vector_store_config = rag_config.get("vector_store", {})
-        qwen_config = rag_config.get("qwen", {})
-        retriever_config = rag_config.get("retriever", {})
-
+    def __init__(
+        self,
+        index_store: KnowledgeIndexStore,
+        document_splitter: DocumentSplitter,
+        vector_store,
+        default_top_k: int = 3,
+    ):
         self.index_store = index_store
-        self.document_splitter = document_splitter or DocumentSplitter()
-        self.default_top_k = retriever_config.get("default_top_k", 3)
-
-        chroma_persist_dir = storage_config.get("chroma_persist_dir", "data/chroma")
-        Path(chroma_persist_dir).mkdir(parents=True, exist_ok=True)
-
-        self.vector_store = Chroma(
-            collection_name=vector_store_config.get("collection_name", "knowledge_base_documents"),
-            embedding_function=DashScopeEmbeddings(
-                model=qwen_config.get("embedding_model", "text-embedding-v4"),
-                dashscope_api_key=get_env("DASHSCOPE_API_KEY"),
-            ),
-            persist_directory=chroma_persist_dir,
-        )
+        self.document_splitter = document_splitter
+        self.vector_store = vector_store
+        self.default_top_k = default_top_k
 
     def upload_document(
         self,
@@ -431,7 +416,7 @@ class KnowledgeBaseService:
             "message": f"document 已删除，并从 Chroma 删除 {len(chunk_ids)} 个 active chunks。",
         }
 
-    def delete_document_chunk(self, document_id: str, chunk_id: str) -> dict | None:
+    def delete_chunk(self, document_id: str, chunk_id: str) -> dict | None:
         document_id = document_id.strip()
         chunk_id = chunk_id.strip()
         if not document_id or not chunk_id:

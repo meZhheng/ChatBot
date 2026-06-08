@@ -105,6 +105,6 @@ D:\Anaconda\Scripts\activate && conda activate agent && uvicorn app.main:app --r
 
 SQLite 保存 document/chunk 的 SHA-256 hash 索引、chunk 归属关系、删除状态和统计信息，不保存原始 document 正文。Chroma 保存 chunk 文本、向量和检索 metadata，并使用 `chk_` 前缀的显式 chunk id。
 
-FastAPI 在应用生命周期启动时创建 SQLite 连接，默认数据库路径由 `configs/rag_config.yml` 的 `storage.sqlite_path` 配置，当前默认值是 `data/sqlite/knowledge_base.sqlite`。连接对象保存在 `app.state.sqlite`，知识库索引对象保存在 `app.state.knowledge_index_store`，知识库服务对象保存在 `app.state.knowledge_base`。
+FastAPI 在应用生命周期启动时创建 `RagService`，默认数据库路径由 `configs/rag_config.yml` 的 `storage.sqlite_path` 配置，当前默认值是 `data/sqlite/knowledge_base.sqlite`。SQLite 连接对象保存在 `app.state.sqlite`，RAG 入口服务保存在 `app.state.rag_service`。
 
-API 层通过 `request.app.state.knowledge_base` 使用服务，不在服务层中反向导入 FastAPI app，避免循环导入。
+API 层通过 `request.app.state.rag_service` 使用 RAG 能力，不在服务层中反向导入 FastAPI app，避免循环导入。
