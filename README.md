@@ -94,12 +94,17 @@ D:\Anaconda\Scripts\activate && conda activate agent && uvicorn app.main:app --r
 
 - `GET /`：聊天机器人首页。
 - `POST /api/chat`：接收消息并返回占位回复。
-- `POST /api/knowledge/upload`：接收上传文件，读取 UTF-8 文本内容，用 SQLite 记录文本 MD5，并识别重复文本。
+- `POST /api/knowledge/upload`：接收 UTF-8 文本文档，按 document/chunk 双层模型写入知识库。
+- `GET /api/admin/rag/documents`：查看当前 documents 及其 active chunks。
+- `GET /api/admin/rag/documents/{document_id}`：查看单个 document 及其 active chunks。
+- `DELETE /api/admin/rag/documents/{document_id}`：删除整个 document 及其 active chunks。
+- `DELETE /api/admin/rag/documents/{document_id}/chunks/{chunk_id}`：删除某个 document 下的 chunk。
+- `POST /api/admin/rag/retrieve`：执行 RAG 检索测试。
 
-## SQLite MD5 索引
+## 知识库存储模型
 
-Chroma 负责后续向量存储和 RAG 检索。SQLite 只用于保存已处理文本的 MD5 索引，避免重复处理相同文本，不保存正文内容。
+SQLite 保存 document/chunk 的 SHA-256 hash 索引、chunk 归属关系、删除状态和统计信息，不保存原始 document 正文。Chroma 保存 chunk 文本、向量和检索 metadata，并使用 `chk_` 前缀的显式 chunk id。
 
-FastAPI 在应用生命周期启动时创建 SQLite 连接，默认数据库路径由 `configs/rag_config.yml` 的 `storage.sqlite_path` 配置，当前默认值是 `data/sqlite/knowledge_base.sqlite`。连接对象保存在 `app.state.sqlite`，知识库服务对象保存在 `app.state.knowledge_base`。
+FastAPI 在应用生命周期启动时创建 SQLite 连接，默认数据库路径由 `configs/rag_config.yml` 的 `storage.sqlite_path` 配置，当前默认值是 `data/sqlite/knowledge_base.sqlite`。连接对象保存在 `app.state.sqlite`，知识库索引对象保存在 `app.state.knowledge_index_store`，知识库服务对象保存在 `app.state.knowledge_base`。
 
-API 层通过 `request.app.state.knowledge_base` 使用服务，不在 `memory/knowledge_base.py` 中反向导入 FastAPI app，避免循环导入。
+API 层通过 `request.app.state.knowledge_base` 使用服务，不在服务层中反向导入 FastAPI app，避免循环导入。

@@ -5,9 +5,6 @@ const uploadForm = document.querySelector("#uploadForm");
 const knowledgeFile = document.querySelector("#knowledgeFile");
 const fileName = document.querySelector("#fileName");
 const uploadResult = document.querySelector("#uploadResult");
-const refreshChunksButton = document.querySelector("#refreshChunksButton");
-const chunksStatus = document.querySelector("#chunksStatus");
-const chunksList = document.querySelector("#chunksList");
 const retrieveForm = document.querySelector("#retrieveForm");
 const queryInput = document.querySelector("#queryInput");
 const topKInput = document.querySelector("#topKInput");
@@ -16,7 +13,6 @@ const retrieveResults = document.querySelector("#retrieveResults");
 
 const hasChatUi = Boolean(chatForm && messageInput && chatMessages);
 const hasUploadUi = Boolean(uploadForm && knowledgeFile && fileName && uploadResult);
-const hasChunksUi = Boolean(refreshChunksButton && chunksStatus && chunksList);
 const hasRetrieveUi = Boolean(retrieveForm && queryInput && topKInput && retrieveStatus && retrieveResults);
 
 function appendMessage(role, text) {
@@ -63,67 +59,6 @@ if (hasUploadUi) {
   });
 }
 
-if (hasChunksUi) {
-  function renderChunks(chunks) {
-    chunksList.replaceChildren();
-
-    if (!chunks.length) {
-      chunksStatus.textContent = "当前没有已入库 chunks。";
-      return;
-    }
-
-    chunksStatus.textContent = `共 ${chunks.length} 条 chunks`;
-
-    for (const chunk of chunks) {
-      const card = document.createElement("article");
-      card.className = "chunk-card";
-
-      const text = document.createElement("pre");
-      text.className = "chunk-text";
-      text.textContent = chunk.text;
-
-      const meta = document.createElement("dl");
-      meta.className = "chunk-meta";
-
-      const fields = [
-        ["source", chunk.metadata?.source ?? "-"],
-        ["created_at", chunk.metadata?.created_at ?? "-"],
-        ["operator", chunk.metadata?.operator ?? "-"],
-        ["id", chunk.id],
-      ];
-
-      for (const [label, value] of fields) {
-        const item = document.createElement("div");
-        const term = document.createElement("dt");
-        term.textContent = label;
-        const definition = document.createElement("dd");
-        definition.textContent = String(value);
-        item.append(term, definition);
-        meta.append(item);
-      }
-
-      card.append(text, meta);
-      chunksList.append(card);
-    }
-  }
-
-  async function loadChunks() {
-    chunksStatus.textContent = "正在加载 chunks...";
-
-    try {
-      const response = await fetch("/api/knowledge/chunks");
-      const data = await response.json();
-      renderChunks(data.chunks);
-    } catch (error) {
-      chunksList.replaceChildren();
-      chunksStatus.textContent = "chunks 加载失败，请点击刷新重试。";
-    }
-  }
-
-  refreshChunksButton.addEventListener("click", loadChunks);
-
-  loadChunks();
-}
 
 if (hasRetrieveUi) {
   retrieveForm.addEventListener("submit", async (event) => {
@@ -211,8 +146,5 @@ if (hasUploadUi) {
     uploadResult.textContent = `${data.filename}：${data.message}`;
     uploadForm.reset();
     fileName.textContent = "支持 txt、pdf 等后续可解析文件";
-    if (hasChunksUi) {
-      await loadChunks();
-    }
   });
 }

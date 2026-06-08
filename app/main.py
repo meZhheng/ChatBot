@@ -8,8 +8,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from agent.rag.retriever import KnowledgeBaseService, TextHashService
+from agent.rag.chat_chain import RagChatChain
+from agent.rag.knowledge_base import KnowledgeBaseService, KnowledgeIndexStore
 from agent.rag.rag_service import RagService
+from agent.rag.retrieval_pipeline import RetrievalPipeline
 from agent.utils.config_handler import load_rag_config
 
 
@@ -31,20 +33,70 @@ class ChatRequest(BaseModel):
 
 
 class ChunkMetadata(BaseModel):
+    chunk_id: str | None = None
+    chunk_hash: str | None = None
+    document_id: str | None = None
+    document_hash: str | None = None
+    chunk_index: int | None = None
     source: str | None = None
     created_at: str | None = None
     operator: str | None = None
+    text_length: int | None = None
 
 
 class ChunkItem(BaseModel):
     id: str
+    chunk_id: str
+    chunk_hash: str
+    document_id: str
+    chunk_index: int
     text: str
+    text_length: int
+    source: str
+    status: str
+    operator: str
+    created_at: str
+    updated_at: str
+    deleted_at: str | None = None
     metadata: ChunkMetadata
 
 
-class ChunkListResponse(BaseModel):
-    count: int
+class DocumentItem(BaseModel):
+    document_id: str
+    document_hash: str
+    filename: str
+    source: str
+    content_type: str | None = None
+    size_bytes: int
+    status: str
+    active_chunk_count: int
+    total_chunk_count: int
+    added_chunk_count: int
+    reassigned_chunk_count: int
+    operator: str
+    created_at: str
+    updated_at: str
+    deleted_at: str | None = None
     chunks: list[ChunkItem]
+
+
+class DocumentListResponse(BaseModel):
+    count: int
+    documents: list[DocumentItem]
+
+
+class UploadDocumentResponse(BaseModel):
+    document_id: str
+    document_hash: str
+    filename: str
+    content_type: str | None = None
+    status: str
+    is_duplicate: bool
+    chunk_count: int
+    active_chunk_count: int
+    added_chunk_count: int
+    reassigned_chunk_count: int
+    message: str
 
 
 class RetrieveRequest(BaseModel):
@@ -65,6 +117,22 @@ class RetrieveResponse(BaseModel):
     results: list[RetrieveResultItem]
 
 
+class DeleteDocumentResponse(BaseModel):
+    document_id: str
+    deleted: bool
+    deleted_chunk_count: int
+    message: str
+
+
+class DeleteDocumentChunkResponse(BaseModel):
+    document_id: str
+    chunk_id: str
+    deleted: bool
+    document_status: str
+    remaining_chunks: int
+    message: str
+
+
 def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -72,18 +140,23 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         if db_path.parent != Path(""):
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        text_hash_service = TextHashService(db_path)
-        knowledge_base = KnowledgeBaseService(text_hash_service)
+        knowledge_index_store = KnowledgeIndexStore(db_path)
+        knowledge_base = KnowledgeBaseService(knowledge_index_store)
+        retrieval_pipeline = RetrievalPipeline(knowledge_base)
+        rag_service = RagService(retrieval_pipeline)
+        rag_chat_chain = RagChatChain(retrieval_pipeline)
 
-        app.state.sqlite = text_hash_service.sqlite
-        app.state.text_hash_service = text_hash_service
+        app.state.sqlite = knowledge_index_store.sqlite
+        app.state.knowledge_index_store = knowledge_index_store
         app.state.knowledge_base = knowledge_base
-        app.state.rag_service = RagService(knowledge_base)
+        app.state.retrieval_pipeline = retrieval_pipeline
+        app.state.rag_service = rag_service
+        app.state.rag_chat_chain = rag_chat_chain
 
         try:
             yield
         finally:
-            text_hash_service.close()
+            knowledge_index_store.close()
 
     app = FastAPI(title="智能对话智能体", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -112,7 +185,7 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
 
         def stream_reply():
             try:
-                for chunk in app.state.rag_service.chain.stream({"query": query}, chat_config):
+                for chunk in app.state.rag_chat_chain.chain.stream({"query": query}, chat_config):
                     if chunk:
                         yield chunk
             except Exception as exc:
@@ -120,40 +193,63 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
 
         return StreamingResponse(stream_reply(), media_type="text/plain; charset=utf-8")
 
-    @app.post("/api/knowledge/upload")
-    async def upload_knowledge_file(request: Request, file: UploadFile = File(...)):
-        file_name = file.filename
+    @app.post("/api/knowledge/upload", response_model=UploadDocumentResponse)
+    async def upload_knowledge_file(file: UploadFile = File(...)):
+        file_name = file.filename or "uploaded_document"
         content = await file.read()
-        content_text = content.decode("utf-8")
+        try:
+            content_text = content.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=400, detail="当前只支持 UTF-8 文本文档。") from exc
 
-        content_hash = app.state.text_hash_service.get_md5_hash(content_text)
-        is_updated = app.state.knowledge_base.update_by_text(content_text, file_name)
+        return app.state.knowledge_base.upload_document(
+            content_text,
+            file_name,
+            content_type=file.content_type,
+            operator="admin",
+        )
 
-        return {
-            "filename": file_name,
-            "content_type": file.content_type,
-            "content_hash": content_hash,
-            "is_duplicate": not is_updated,
-            "is_new_text": is_updated,
-            "status": "indexed" if is_updated else "duplicate",
-            "message": "文本已写入 Chroma 向量库。" if is_updated else "文本 MD5 已存在，跳过重复入库。",
-        }
+    @app.get("/api/admin/rag/documents", response_model=DocumentListResponse)
+    def admin_rag_documents():
+        documents = app.state.knowledge_base.list_documents()
+        return {"count": len(documents), "documents": documents}
 
-    @app.get("/api/knowledge/chunks", response_model=ChunkListResponse)
-    def list_knowledge_chunks():
-        chunks = app.state.knowledge_base.list_chunks()
-        return {"count": len(chunks), "chunks": chunks}
+    @app.get("/api/admin/rag/documents/{document_id}", response_model=DocumentItem)
+    def admin_rag_document(document_id: str):
+        document = app.state.knowledge_base.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="document 不存在或已被删除。")
+        return document
 
-    @app.get("/api/admin/rag/chunks", response_model=ChunkListResponse)
-    def admin_rag_chunks():
-        chunks = app.state.knowledge_base.list_chunks()
-        return {"count": len(chunks), "chunks": chunks}
+    @app.delete("/api/admin/rag/documents/{document_id}", response_model=DeleteDocumentResponse)
+    def admin_delete_rag_document(document_id: str):
+        result = app.state.knowledge_base.delete_document(document_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="document 不存在或已被删除。")
+        return result
+
+    @app.delete(
+        "/api/admin/rag/documents/{document_id}/chunks/{chunk_id}",
+        response_model=DeleteDocumentChunkResponse,
+    )
+    def admin_delete_rag_document_chunk(document_id: str, chunk_id: str):
+        result = app.state.knowledge_base.delete_document_chunk(document_id, chunk_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="chunk 不存在、已被删除或不属于该 document。")
+        return result
 
     @app.post("/api/admin/rag/retrieve", response_model=RetrieveResponse)
     def admin_rag_retrieve(payload: RetrieveRequest):
-        results = app.state.knowledge_base.retrieve(payload.query, top_k=payload.top_k)
-        return {"query": payload.query, "top_k": payload.top_k, "results": results}
+        query = payload.query.strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="query 不能为空。")
+        if payload.top_k < 1:
+            raise HTTPException(status_code=400, detail="top_k 必须大于 0。")
+
+        results = app.state.rag_service.retrieve(query, top_k=payload.top_k)
+        return {"query": query, "top_k": payload.top_k, "results": results}
 
     return app
+
 
 app = create_app()

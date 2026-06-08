@@ -9,16 +9,13 @@ storage:
   history_store: memory/chat_history/{session_id}.json
 
 vector_store:
-  collection_name: knowledge_base
+  collection_name: knowledge_base_documents
+  allowed_knowledge_file_types: ["txt", "pdf"]
 
 text_splitter:
   chunk_size: 1000
   chunk_overlap: 200
-  separators:
-    - "\n\n"
-    - "\n"
-    - " "
-    - ""
+  separators: ["\n\n", "\n", " ", ""]
   min_split_length: 500
 
 retriever:

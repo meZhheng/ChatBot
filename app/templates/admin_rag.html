@@ -43,17 +43,17 @@
           <p id="uploadStatus" class="upload-status">选择文件后即可上传到 Chroma 知识库。</p>
         </section>
 
-        <section class="chunks-panel" aria-labelledby="chunksTitle">
-          <div class="chunks-panel-header">
+        <section class="documents-panel" aria-labelledby="documentsTitle">
+          <div class="documents-panel-header">
             <div>
-              <p class="label">向量数据库</p>
-              <h2 id="chunksTitle">当前 chunks</h2>
+              <p class="label">知识库文档</p>
+              <h2 id="documentsTitle">当前 documents</h2>
             </div>
-            <button id="refreshChunksButton" type="button">刷新</button>
+            <button id="refreshDocumentsButton" type="button">刷新</button>
           </div>
 
-          <p id="chunksStatus" class="chunks-status">页面加载后自动读取 Chroma 中的 chunks。</p>
-          <div id="chunksList" class="chunks-list" aria-live="polite"></div>
+          <p id="documentsStatus" class="documents-status">页面加载后自动读取 SQLite document/chunk 索引，并展示 Chroma 中的 active chunks。</p>
+          <div id="documentsList" class="documents-list" aria-live="polite"></div>
         </section>
 
         <section class="retrieve-panel" aria-labelledby="retrieveTitle">

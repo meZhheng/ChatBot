@@ -9,7 +9,7 @@ from agent.utils.config_handler import get_env, load_agent_config, load_prompts_
 agent_config = load_agent_config()
 prompts_config = load_prompts_config()
 qwen_config = agent_config.get("qwen", {})
-agent_prompts = prompts_config.get("agent", {})
+system_prompt = prompts_config.get("system", {})
 
 agent = create_agent(
     model=ChatOpenAI(
@@ -19,10 +19,7 @@ agent = create_agent(
     ),
     tools=[get_current_time, get_weight, get_distance],
     middleware=[log_before_agent, log_after_agent, log_before_model, log_after_model, model_call_hook, monitor_tool],
-    system_prompt=agent_prompts.get(
-        "system_prompt",
-        "你是一个严格遵循ReAct框架的客服智能体，必须按“思考->行动->观察->再思考”的流程解决问题。你需要尽可能利用现有的工具解决问题。",
-    )
+    system_prompt=system_prompt
 )
 
 

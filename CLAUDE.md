@@ -6,7 +6,7 @@
 
 ## 当前初始化文件
 
-- `app/main.py`：FastAPI 应用入口，提供首页、聊天占位接口和知识库上传接口，并在 lifespan 中初始化 SQLite MD5 索引服务。
+- `app/main.py`：FastAPI 应用入口，提供首页、聊天接口和知识库上传接口，并在 lifespan 中初始化 SQLite document/chunk 索引服务。
 - `app/templates/index.html`：模板分离的首页，包含聊天框和 RAG 知识库上传模块。
 - `app/static/app.css`：首页样式。
 - `app/static/app.js`：首页聊天和上传交互。
@@ -26,7 +26,7 @@
 - 当前项目 Python 命令使用 Conda 环境 `agent`，在 Claude 的 Git Bash 环境中用 `cmd.exe //C "D:\Anaconda\Scripts\activate && conda activate agent && <command>"` 执行。
 - 优先保持模块职责单一：API 路由、模型封装、向量库、知识库处理、RAG 流程分开维护。
 - 应用级共享资源放在 `app.state`；当前 SQLite 连接为 `app.state.sqlite`，知识库服务为 `app.state.knowledge_base`，服务层不要反向导入 FastAPI app。
-- Chroma 是 RAG 使用的向量数据库；SQLite 只用于存储已处理文本的 MD5 索引和快速去重，不保存正文内容。
+- Chroma 是 RAG 使用的向量数据库；SQLite 用于存储 document/chunk SHA-256 索引、chunk 归属、删除状态和统计信息，不保存原始正文。
 - 对低风险、可逆的本地文件操作可直接执行；涉及删除、覆盖用户改动、联网发布、推送代码、修改共享资源等高风险操作前仍需确认。
 
 ## 推荐后续模块边界

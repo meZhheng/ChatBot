@@ -34,3 +34,7 @@ def load_prompts_config(config_file: str | Path | None = None) -> dict:
 
 def load_agent_config(config_file: str | Path | None = None) -> dict:
     return _load_yaml(config_file or _config_path("agent_config.yml"))
+
+rag_config = load_rag_config()
+prompts_config = load_prompts_config()
+agent_config = load_agent_config()
