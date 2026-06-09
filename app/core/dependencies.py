@@ -5,6 +5,10 @@ def get_rag_service(request: Request):
     return request.app.state.rag_service
 
 
+def get_faq_service(request: Request):
+    return request.app.state.faq_service
+
+
 def get_agent_service(request: Request):
     return request.app.state.agent_service
 

@@ -15,3 +15,8 @@ def homepage(request: Request):
 @router.get("/admin/rag", response_class=HTMLResponse)
 def rag_admin_page(request: Request):
     return templates.TemplateResponse(request, "admin_rag.html")
+
+
+@router.get("/admin/faq", response_class=HTMLResponse)
+def faq_admin_page(request: Request):
+    return templates.TemplateResponse(request, "admin_faq.html")

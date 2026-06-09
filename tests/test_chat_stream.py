@@ -1,8 +1,10 @@
 import json
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage, ToolMessage
 
 from app.api.chat import router
+from agent.bot import AgentService
 
 
 class FakeAgentService:
@@ -82,3 +84,54 @@ def test_delete_chat_session_calls_agent_service():
     assert response.status_code == 200
     assert response.json() == {"deleted": True, "session_id": "chat-1"}
     assert service.deleted == ["chat-1"]
+
+
+def test_tool_call_events_include_type():
+    message = AIMessage(
+        content="",
+        tool_calls=[{"id": "call-1", "name": "get_current_time", "args": {}}],
+    )
+
+    events = AgentService._extract_tool_call_events(AgentService, message, {}, {}, set())
+
+    assert events == [
+        {
+            "type": "tool_call",
+            "role": "tool",
+            "name": "get_current_time",
+            "tool_call_id": "call-1",
+            "args": {},
+            "content": "调用工具 get_current_time",
+        }
+    ]
+
+
+def test_tool_result_events_include_args_and_content():
+    data = {
+        "tools": {
+            "messages": [ToolMessage(content="2026-06-09 12:00:00", tool_call_id="call-1")]
+        }
+    }
+
+    service = object.__new__(AgentService)
+
+    events = service._extract_update_events(
+        data,
+        {"call-1": "get_current_time"},
+        {"call-1": {"timezone": "local"}},
+        set(),
+        set(),
+        1200,
+    )
+
+    assert events == [
+        {
+            "type": "tool_result",
+            "role": "tool",
+            "name": "get_current_time",
+            "tool_call_id": "call-1",
+            "args": {"timezone": "local"},
+            "content": "2026-06-09 12:00:00",
+            "metadata": {"truncated": False},
+        }
+    ]

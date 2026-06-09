@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAQ 管理</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Admin · FAQ</p>
+      <h1>FAQ 管理</h1>
+      <p class="hero-copy">管理客服场景高频问答库，标准问和扩展问会同步进入 BM25 与 Chroma 双路检索。</p>
+      <a class="temp-entry" href="/">返回聊天页</a>
+      <a class="temp-entry" href="/admin/rag">RAG 管理</a>
+    </section>
+
+    <section class="workspace" aria-label="FAQ 管理工作区">
+      <aside class="panel knowledge-panel faq-panel">
+        <div class="panel-header">
+          <div>
+            <p class="label">客服问答库</p>
+            <h2>Frequent Questions</h2>
+          </div>
+        </div>
+
+        <p class="knowledge-copy">新增或编辑 FAQ 后，标准问和扩展问都会进入检索索引，后续客服智能体可通过 /api/faq/retrieve 调用。</p>
+
+        <section class="upload-panel faq-editor-panel" aria-labelledby="faqEditorTitle">
+          <div class="panel-header">
+            <div>
+              <p class="label">问答维护</p>
+              <h2 id="faqEditorTitle">Create / Edit FAQ</h2>
+            </div>
+          </div>
+
+          <form id="faqForm" class="faq-form retrieve-form">
+            <input id="faqIdInput" type="hidden">
+
+            <label for="faqQuestionInput">标准问</label>
+            <textarea id="faqQuestionInput" rows="3" placeholder="例如：如何申请退款？" required></textarea>
+
+            <label for="faqAnswerInput">答案</label>
+            <textarea id="faqAnswerInput" rows="5" placeholder="输入客服标准回复" required></textarea>
+
+            <div class="faq-form-grid">
+              <label>
+                分类
+                <input id="faqCategoryInput" type="text" value="default" required>
+              </label>
+              <label>
+                标签（逗号分隔）
+                <input id="faqTagsInput" type="text" placeholder="退款,订单">
+              </label>
+              <label>
+                优先级
+                <input id="faqPriorityInput" type="number" value="0">
+              </label>
+              <label>
+                状态
+                <select id="faqStatusInput">
+                  <option value="active">active</option>
+                  <option value="disabled">disabled</option>
+                </select>
+              </label>
+            </div>
+
+            <label for="faqVariantsInput">扩展问（每行一个）</label>
+            <textarea id="faqVariantsInput" rows="4" placeholder="例如：退款怎么操作？&#10;订单能退款吗？"></textarea>
+
+            <div class="faq-actions">
+              <button id="faqSubmitButton" type="submit">保存 FAQ</button>
+              <button id="faqResetButton" class="ghost-button" type="button">清空表单</button>
+            </div>
+          </form>
+
+          <p id="faqFormStatus" class="upload-status">填写标准问和答案后即可保存。</p>
+        </section>
+
+        <section class="documents-panel" aria-labelledby="faqListTitle">
+          <div class="documents-panel-header">
+            <div>
+              <p class="label">FAQ 列表</p>
+              <h2 id="faqListTitle">当前问答</h2>
+            </div>
+            <button id="refreshFaqButton" type="button">刷新</button>
+          </div>
+
+          <form id="faqFilterForm" class="faq-filter-form retrieve-form">
+            <input id="faqSearchInput" type="search" placeholder="按标准问 / 答案 / 标签 / 扩展问筛选">
+            <input id="faqFilterCategoryInput" type="text" placeholder="分类，可选">
+            <select id="faqFilterStatusInput">
+              <option value="active">active</option>
+              <option value="disabled">disabled</option>
+              <option value="">active + disabled</option>
+            </select>
+            <button type="submit">筛选</button>
+          </form>
+
+          <p id="faqListStatus" class="documents-status">页面加载后自动读取 FAQ。</p>
+          <div id="faqList" class="documents-list faq-list" aria-live="polite"></div>
+        </section>
+
+        <section class="retrieve-panel" aria-labelledby="faqRetrieveTitle">
+          <div class="panel-header retrieve-panel-header">
+            <div>
+              <p class="label">检索测试</p>
+              <h2 id="faqRetrieveTitle">BM25 + Chroma Retrieve</h2>
+            </div>
+          </div>
+
+          <form id="faqRetrieveForm" class="retrieve-form">
+            <label for="faqRetrieveQueryInput">query</label>
+            <textarea id="faqRetrieveQueryInput" rows="4" placeholder="输入用户问法" required></textarea>
+
+            <div class="faq-form-grid">
+              <label>
+                top_k
+                <input id="faqRetrieveTopKInput" type="number" min="1" value="5" required>
+              </label>
+              <label>
+                分类（可选）
+                <input id="faqRetrieveCategoryInput" type="text" placeholder="default">
+              </label>
+            </div>
+
+            <button type="submit">Run FAQ Retrieve</button>
+          </form>
+
+          <p id="faqRetrieveStatus" class="retrieve-status">输入 query 以测试客服智能体 FAQ 召回。</p>
+          <div id="faqRetrieveResults" class="retrieve-results" aria-live="polite"></div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/static/admin_faq.js"></script>
+</body>
+</html>

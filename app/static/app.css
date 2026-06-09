@@ -38,7 +38,9 @@ body::before {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -393,17 +395,187 @@ h1 {
   background: rgba(69, 216, 255, 0.12);
 }
 
-.message.tool {
-  max-width: 74%;
-  align-self: flex-start;
-  border: 1px solid rgba(255, 209, 102, 0.22);
-  background: linear-gradient(135deg, rgba(255, 209, 102, 0.1), rgba(128, 255, 219, 0.055));
-  color: #f9e6b0;
-  font-size: 0.9rem;
+.agent-status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  align-items: center;
+  gap: 10px;
+  margin: 12px 18px 0;
+  border: 1px dashed rgba(128, 255, 219, 0.24);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: var(--muted);
+  background: rgba(4, 11, 18, 0.48);
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
-.message.tool .message-role {
-  color: var(--warning);
+.agent-status[hidden] {
+  display: none;
+}
+
+.agent-status-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 16px rgba(128, 255, 219, 0.7);
+  animation: stream-cursor 900ms ease-in-out infinite;
+}
+
+.message.tool {
+  display: block;
+  width: min(760px, 86%);
+  max-width: 86%;
+  min-height: 48px;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 0;
+  border: 1px solid rgba(255, 209, 102, 0.26);
+  border-left: 4px solid var(--warning);
+  background:
+    linear-gradient(135deg, rgba(255, 209, 102, 0.13), rgba(128, 255, 219, 0.04)),
+    rgba(4, 11, 18, 0.78);
+  color: #f9e6b0;
+  font-size: 0.9rem;
+  overflow: hidden;
+}
+
+.message.tool > .message-role,
+.message.tool > p {
+  margin: 12px 14px;
+}
+
+.tool-card {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  overflow: hidden;
+}
+
+.tool-summary {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  padding: 12px 14px;
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-align: left;
+}
+
+.tool-summary:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.tool-summary::after {
+  flex-shrink: 0;
+  color: rgba(255, 209, 102, 0.78);
+  font-size: 0.8rem;
+  content: "展开";
+}
+
+.tool-card.is-open .tool-summary::after {
+  content: "收起";
+}
+
+.tool-badge {
+  display: inline-grid;
+  min-width: 48px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 209, 102, 0.42);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.1);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.tool-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-status {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: #041014;
+  background: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.tool-running .tool-status {
+  background: linear-gradient(135deg, var(--warning), var(--accent));
+}
+
+.tool-body {
+  display: grid;
+  max-height: 0;
+  overflow: hidden;
+  gap: 8px;
+  padding: 0 14px;
+  border-top: 0 solid rgba(255, 209, 102, 0.16);
+  opacity: 0;
+  visibility: hidden;
+  transition: max-height 220ms ease, opacity 160ms ease, padding 160ms ease, border-top-width 160ms ease, visibility 0s linear 220ms;
+}
+
+.tool-card.is-open .tool-body {
+  max-height: 900px;
+  padding: 0 14px 14px;
+  border-top-width: 1px;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.tool-section-title {
+  margin-top: 10px;
+  color: rgba(255, 209, 102, 0.86);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tool-payload {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid rgba(177, 211, 255, 0.12);
+  border-radius: 14px;
+  padding: 11px 12px;
+  color: #dce9ff;
+  background: rgba(2, 7, 12, 0.58);
+  font: 0.82rem/1.55 "Cascadia Code", "Consolas", monospace;
+  white-space: pre-wrap;
+}
+
+.tool-result {
+  max-height: min(420px, 48vh);
+  border-color: rgba(128, 255, 219, 0.2);
+  background: rgba(128, 255, 219, 0.055);
 }
 
 .chat-form {
@@ -759,6 +931,56 @@ h1 {
   margin: 12px 0 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.faq-form-grid,
+.faq-filter-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.faq-form-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.faq-form-grid select,
+.faq-filter-form select,
+.faq-filter-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: var(--text);
+  background: rgba(4, 11, 18, 0.76);
+  outline: none;
+}
+
+.faq-actions,
+.faq-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.faq-actions button,
+.faq-card-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.faq-answer {
+  padding: 14px 16px;
+  border: 1px solid rgba(69, 216, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(4, 11, 18, 0.3);
+}
+
+.faq-retrieve-card h3 {
+  margin: 0 0 10px;
+  color: var(--accent);
 }
 
 .sr-only {

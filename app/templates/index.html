@@ -13,6 +13,7 @@
       <h1>智能对话智能体</h1>
       <p class="hero-copy">一个用于 RAG 知识库问答的最小应用骨架，当前首页只保留聊天体验。</p>
       <a class="temp-entry" href="/admin/rag">RAG 管理（临时）</a>
+      <a class="temp-entry" href="/admin/faq">FAQ 管理（临时）</a>
     </section>
 
     <section class="workspace" aria-label="对话机器人工作区">
@@ -41,6 +42,11 @@
         </div>
 
         <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+
+        <div id="agentStatus" class="agent-status" aria-live="polite" hidden>
+          <span class="agent-status-dot" aria-hidden="true"></span>
+          <span id="agentStatusText">模型正在思考...</span>
+        </div>
 
         <form id="chatForm" class="chat-form">
           <label class="sr-only" for="messageInput">输入消息</label>

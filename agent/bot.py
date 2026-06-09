@@ -21,7 +21,7 @@ from agent.middleware import (
     model_call_hook,
     monitor_tool,
 )
-from agent.sqlite_checkpointer import SQLiteCheckpointSaver
+from agent.checkpointer import SQLiteCheckpointSaver
 from agent.tools import get_current_time, retrieve_knowledge_base, search_internet
 from agent.utils.config_handler import agent_config, get_env, prompts_config
 
@@ -72,6 +72,7 @@ class AgentService:
         final_text_parts: list[str] = []
         final_output = ""
         tool_names: dict[str, str] = {}
+        tool_args: dict[str, Any] = {}
         emitted_tool_calls: set[str] = set()
         emitted_tool_results: set[str] = set()
         last_usage: dict[str, Any] = {}
@@ -107,14 +108,6 @@ class AgentService:
                 mode, data = self._normalize_stream_chunk(chunk)
                 if mode == "messages":
                     message, metadata = data
-                    for tool_event in self._extract_tool_call_events(
-                        message,
-                        session_id,
-                        tool_names,
-                        emitted_tool_calls,
-                    ):
-                        yield event("tool_call", **tool_event)
-
                     content = self._message_text(message)
                     if content and isinstance(message, (AIMessage, AIMessageChunk)):
                         final_text_parts.append(content)
@@ -126,8 +119,8 @@ class AgentService:
                 elif mode == "updates":
                     for update_event in self._extract_update_events(
                         data,
-                        session_id,
                         tool_names,
+                        tool_args,
                         emitted_tool_calls,
                         emitted_tool_results,
                         max_tool_result_chars,
@@ -180,8 +173,8 @@ class AgentService:
     def _extract_update_events(
         self,
         data: Any,
-        session_id: str,
         tool_names: dict[str, str],
+        tool_args: dict[str, Any],
         emitted_tool_calls: set[str],
         emitted_tool_results: set[str],
         max_tool_result_chars: int,
@@ -192,8 +185,8 @@ class AgentService:
             events.extend(
                 self._extract_tool_call_events(
                     message,
-                    session_id,
                     tool_names,
+                    tool_args,
                     emitted_tool_calls,
                 )
             )
@@ -209,7 +202,8 @@ class AgentService:
                         "role": "tool",
                         "name": tool_names.get(tool_call_id, getattr(message, "name", None) or "tool"),
                         "tool_call_id": tool_call_id,
-                        "content": content,
+                        "args": tool_args.get(tool_call_id, {}),
+                        "content": content or "工具返回了空结果。",
                         "metadata": {"truncated": truncated},
                     }
                 )
@@ -222,25 +216,30 @@ class AgentService:
     def _extract_tool_call_events(
         self,
         message: Any,
-        session_id: str,
         tool_names: dict[str, str],
+        tool_args: dict[str, Any],
         emitted_tool_calls: set[str],
     ) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
         tool_calls = getattr(message, "tool_calls", None) or []
-        for index, tool_call in enumerate(tool_calls):
-            tool_call_id = tool_call.get("id") or f"{getattr(message, 'id', session_id)}:{index}"
+        for tool_call in tool_calls:
+            tool_call_id = tool_call.get("id")
+            name = tool_call.get("name")
+            if not tool_call_id or not name:
+                continue
             if tool_call_id in emitted_tool_calls:
                 continue
+            args = tool_call.get("args") or {}
             emitted_tool_calls.add(tool_call_id)
-            name = tool_call.get("name") or "tool"
             tool_names[tool_call_id] = name
+            tool_args[tool_call_id] = args
             events.append(
                 {
+                    "type": "tool_call",
                     "role": "tool",
                     "name": name,
                     "tool_call_id": tool_call_id,
-                    "args": tool_call.get("args") or {},
+                    "args": args,
                     "content": f"调用工具 {name}",
                 }
             )

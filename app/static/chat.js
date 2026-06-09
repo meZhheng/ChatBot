@@ -2,6 +2,8 @@ const chatForm = document.querySelector("#chatForm");
 const messageInput = document.querySelector("#messageInput");
 const sendButton = document.querySelector("#sendButton");
 const chatMessages = document.querySelector("#chatMessages");
+const agentStatus = document.querySelector("#agentStatus");
+const agentStatusText = document.querySelector("#agentStatusText");
 const sessionLabel = document.querySelector("#sessionLabel");
 const sessionSelect = document.querySelector("#sessionSelect");
 const newSessionButton = document.querySelector("#newSessionButton");
@@ -37,7 +39,10 @@ if (chatForm && messageInput && sendButton && chatMessages) {
     appendMessage("user", message);
     touchSession(sessionId, message);
 
-    const botMessage = appendMessage("bot", "模型正在思考...", "thinking");
+    const streamUi = {
+      botMessage: null,
+    };
+    showAgentStatus("模型正在思考...");
     let reply = "";
     let finalReply = "";
     let streamFailed = false;
@@ -73,7 +78,7 @@ if (chatForm && messageInput && sendButton && chatMessages) {
         for (const line of lines) {
           const streamEvent = parseStreamLine(line);
           if (!streamEvent) continue;
-          const result = handleStreamEvent(streamEvent, botMessage, reply, finalReply);
+          const result = handleStreamEvent(streamEvent, streamUi, reply, finalReply);
           reply = result.reply;
           finalReply = result.finalReply;
           if (streamEvent.type === "error") streamFailed = true;
@@ -84,7 +89,7 @@ if (chatForm && messageInput && sendButton && chatMessages) {
       if (buffer.trim()) {
         const streamEvent = parseStreamLine(buffer);
         if (streamEvent) {
-          const result = handleStreamEvent(streamEvent, botMessage, reply, finalReply);
+          const result = handleStreamEvent(streamEvent, streamUi, reply, finalReply);
           reply = result.reply;
           finalReply = result.finalReply;
           if (streamEvent.type === "error") streamFailed = true;
@@ -92,18 +97,23 @@ if (chatForm && messageInput && sendButton && chatMessages) {
       }
 
       if (streamFailed) {
-        setMessageState(botMessage, "failed");
+        const failedMessage = ensureBotMessage(streamUi);
+        setMessageState(failedMessage, "failed");
       } else {
         const savedReply = finalReply || reply || "没有收到模型输出。";
-        updateMessage(botMessage, savedReply);
-        setMessageState(botMessage, "done");
+        hideAgentStatus();
+        const finalMessage = ensureBotMessage(streamUi);
+        updateMessage(finalMessage, savedReply);
+        setMessageState(finalMessage, "done");
         messages.push({ role: "bot", text: savedReply });
         saveMessages(sessionId, messages);
       }
     } catch (error) {
       const errorText = error instanceof Error ? error.message : "聊天请求失败，请稍后重试。";
-      setMessageState(botMessage, "failed");
-      updateMessage(botMessage, errorText);
+      hideAgentStatus();
+      const failedMessage = ensureBotMessage(streamUi);
+      setMessageState(failedMessage, "failed");
+      updateMessage(failedMessage, errorText);
       messages.push({ role: "bot", text: errorText, state: "failed" });
       saveMessages(sessionId, messages);
     } finally {
@@ -248,7 +258,8 @@ if (chatForm && messageInput && sendButton && chatMessages) {
     try {
       const parsed = JSON.parse(rawHistory);
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item) => item && ["user", "bot", "tool"].includes(item.role) && typeof item.text === "string");
+      const validMessages = parsed.filter((item) => item && ["user", "bot", "tool"].includes(item.role) && typeof item.text === "string");
+      return dedupeToolMessages(validMessages);
     } catch (error) {
       return [];
     }
@@ -283,7 +294,11 @@ if (chatForm && messageInput && sendButton && chatMessages) {
     }
 
     for (const message of messages) {
-      appendMessage(message.role, message.text, message.state || "");
+      if (message.role === "tool") {
+        appendStoredToolMessage(message);
+      } else {
+        appendMessage(message.role, message.text, message.state || "");
+      }
     }
   }
 
@@ -333,39 +348,69 @@ if (chatForm && messageInput && sendButton && chatMessages) {
     }
   }
 
-  function handleStreamEvent(streamEvent, botMessage, reply, finalReply) {
+  function ensureBotMessage(streamUi) {
+    if (!streamUi.botMessage) {
+      streamUi.botMessage = appendMessage("bot", "", "generating");
+    }
+    return streamUi.botMessage;
+  }
+
+  function showAgentStatus(text) {
+    if (!agentStatus || !agentStatusText) return;
+    agentStatusText.textContent = text;
+    agentStatus.hidden = false;
+  }
+
+  function hideAgentStatus() {
+    if (!agentStatus) return;
+    agentStatus.hidden = true;
+  }
+
+  function handleStreamEvent(streamEvent, streamUi, reply, finalReply) {
     switch (streamEvent.type) {
       case "thinking":
-        setMessageState(botMessage, "thinking");
-        updateMessage(botMessage, streamEvent.content || "模型正在思考...");
+        showAgentStatus(streamEvent.content || "模型正在思考...");
         break;
       case "tool_call":
+        showAgentStatus(`正在调用工具：${normalizedToolName(streamEvent)}`);
         upsertToolMessage(streamEvent);
         break;
       case "tool_result":
+        showAgentStatus(`工具返回完成：${normalizedToolName(streamEvent)}`);
         upsertToolMessage(streamEvent);
         break;
-      case "output_delta":
+      case "output_delta": {
         reply += streamEvent.content || "";
+        hideAgentStatus();
+        const botMessage = ensureBotMessage(streamUi);
         setMessageState(botMessage, "generating");
         updateMessage(botMessage, reply || "正在生成回复...");
         break;
-      case "output":
+      }
+      case "output": {
         finalReply = streamEvent.content || finalReply;
-        if (finalReply) updateMessage(botMessage, finalReply);
+        if (finalReply) {
+          hideAgentStatus();
+          updateMessage(ensureBotMessage(streamUi), finalReply);
+        }
         break;
+      }
       case "memory":
         appendMessage("tool", streamEvent.content || "上下文压缩钩子已触发。", "done");
         messages.push({ role: "tool", text: streamEvent.content || "上下文压缩钩子已触发。", state: "done" });
         break;
-      case "error":
+      case "error": {
+        hideAgentStatus();
+        const botMessage = ensureBotMessage(streamUi);
         setMessageState(botMessage, "failed");
         updateMessage(botMessage, streamEvent.content || "回复生成失败。请稍后重试。");
         messages.push({ role: "bot", text: streamEvent.content || "回复生成失败。请稍后重试。", state: "failed" });
         saveMessages(sessionId, messages);
         break;
+      }
       case "done":
-        setMessageState(botMessage, "done");
+        if (streamUi.botMessage) setMessageState(streamUi.botMessage, "done");
+        hideAgentStatus();
         break;
       default:
         break;
@@ -374,30 +419,250 @@ if (chatForm && messageInput && sendButton && chatMessages) {
   }
 
   function upsertToolMessage(streamEvent) {
-    const toolCallId = streamEvent.tool_call_id || `${streamEvent.name || "tool"}-${streamEvent.seq || Date.now()}`;
-    const toolName = streamEvent.name || "tool";
-    const argsText = streamEvent.args ? `\n参数：${JSON.stringify(streamEvent.args)}` : "";
-    const resultText = streamEvent.content ? `\n结果：${streamEvent.content}` : "";
-    const text = streamEvent.type === "tool_call"
-      ? `调用工具：${toolName}${argsText}`
-      : `工具完成：${toolName}${resultText}`;
+    const isResult = streamEvent.type === "tool_result";
+    const toolName = normalizedToolName(streamEvent);
+    const toolRecord = resolveToolRecord(streamEvent, toolName, isResult);
+    const { toolCallId, record, created } = toolRecord;
+    const displayToolName = record.toolName && record.toolName !== "tool" ? record.toolName : toolName;
+    const argsText = streamEvent.args !== undefined ? formatToolValue(streamEvent.args, "无参数") : record.args.textContent || "无参数";
+    const resultText = streamEvent.content !== undefined ? formatToolValue(streamEvent.content, "工具返回了空结果。") : record.result.textContent || "等待工具返回结果...";
+    const historyText = isResult
+      ? `工具完成：${displayToolName}\n参数：${argsText}\n结果：${resultText}`
+      : `调用工具：${displayToolName}\n参数：${argsText}`;
 
-    let toolMessage = toolElements.get(toolCallId);
-    if (!toolMessage) {
-      toolMessage = appendMessage("tool", text, streamEvent.type === "tool_call" ? "thinking" : "done");
-      toolElements.set(toolCallId, toolMessage);
-      messages.push({ role: "tool", text, state: streamEvent.type === "tool_call" ? "thinking" : "done" });
+    record.toolName = displayToolName;
+    record.done = isResult;
+    record.name.textContent = displayToolName;
+    record.args.textContent = argsText;
+    if (isResult) record.result.textContent = resultText;
+    record.status.textContent = isResult ? "完成" : "调用中";
+    record.summary.classList.toggle("tool-running", !isResult);
+    record.card.classList.add("is-open");
+    record.summary.setAttribute("aria-expanded", "true");
+    setMessageState(record.element, isResult ? "done" : "thinking");
+
+    if (created) {
+      messages.push({ role: "tool", text: historyText, state: isResult ? "done" : "thinking", toolCallId });
     } else {
-      updateMessage(toolMessage, text);
-      setMessageState(toolMessage, streamEvent.type === "tool_call" ? "thinking" : "done");
-      for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const item = messages[index];
-        if (item.role === "tool" && item.text.includes(toolName)) {
-          item.text = text;
-          item.state = streamEvent.type === "tool_call" ? "thinking" : "done";
-          break;
-        }
+      updateStoredToolMessage(toolCallId, displayToolName, historyText, isResult ? "done" : "thinking");
+    }
+  }
+
+  function createToolCard(toolName, toolCallId) {
+    const message = document.createElement("div");
+    message.className = "message tool thinking";
+    message.dataset.toolCallId = toolCallId;
+
+    const card = document.createElement("div");
+    card.className = "tool-card is-open";
+
+    const summary = document.createElement("button");
+    summary.className = "tool-summary tool-running";
+    summary.type = "button";
+    summary.setAttribute("aria-expanded", "true");
+
+    const badge = document.createElement("span");
+    badge.className = "tool-badge";
+    badge.textContent = "TOOL";
+
+    const name = document.createElement("span");
+    name.className = "tool-name";
+    name.textContent = toolName;
+
+    const status = document.createElement("span");
+    status.className = "tool-status";
+    status.textContent = "调用中";
+
+    const body = document.createElement("div");
+    body.className = "tool-body";
+
+    summary.addEventListener("click", () => {
+      const isOpen = card.classList.toggle("is-open");
+      summary.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    const argsTitle = document.createElement("span");
+    argsTitle.className = "tool-section-title";
+    argsTitle.textContent = "参数";
+
+    const args = document.createElement("pre");
+    args.className = "tool-payload";
+    args.textContent = "无参数";
+
+    const resultTitle = document.createElement("span");
+    resultTitle.className = "tool-section-title";
+    resultTitle.textContent = "结果";
+
+    const result = document.createElement("pre");
+    result.className = "tool-payload tool-result";
+    result.textContent = "等待工具返回结果...";
+
+    summary.append(badge, name, status);
+    body.append(argsTitle, args, resultTitle, result);
+    card.append(summary, body);
+    message.append(card);
+    chatMessages.append(message);
+    scrollMessagesToBottom();
+
+    return { element: message, card, summary, name, status, args, result, toolName, done: false };
+  }
+
+  function resolveToolRecord(streamEvent, toolName, isResult) {
+    const eventId = streamEvent.tool_call_id || "";
+    if (eventId && toolElements.has(eventId)) {
+      return { toolCallId: eventId, record: toolElements.get(eventId), created: false };
+    }
+
+    if (isResult) {
+      const pending = findPendingToolRecord(toolName) || (toolName === "tool" ? findSinglePendingToolRecord() : null);
+      if (pending) {
+        if (eventId) toolElements.set(eventId, pending.record);
+        return { toolCallId: pending.toolCallId, record: pending.record, created: false };
       }
+    }
+
+    const toolCallId = eventId || stableToolCallId(streamEvent, toolName);
+    const existing = toolElements.get(toolCallId);
+    if (existing) return { toolCallId, record: existing, created: false };
+
+    const record = createToolCard(toolName, toolCallId);
+    toolElements.set(toolCallId, record);
+    return { toolCallId, record, created: true };
+  }
+
+  function findPendingToolRecord(toolName) {
+    for (const [toolCallId, record] of toolElements.entries()) {
+      if (record.toolName === toolName && !record.done) {
+        return { toolCallId, record };
+      }
+    }
+    return null;
+  }
+
+  function findSinglePendingToolRecord() {
+    let pending = null;
+    for (const [toolCallId, record] of toolElements.entries()) {
+      if (record.done) continue;
+      if (pending) return null;
+      pending = { toolCallId, record };
+    }
+    return pending;
+  }
+
+  function appendStoredToolMessage(message) {
+    const parsed = parseStoredToolText(message.text);
+    const toolCallId = message.toolCallId || `stored:${parsed.name}:${hashText(message.text)}`;
+    const record = createToolCard(parsed.name, toolCallId);
+    toolElements.set(toolCallId, record);
+    record.toolName = parsed.name;
+    record.done = message.state === "done";
+    record.name.textContent = parsed.name;
+    record.args.textContent = parsed.args || "无参数";
+    record.result.textContent = parsed.result || "等待工具返回结果...";
+    record.status.textContent = record.done ? "完成" : "调用中";
+    record.summary.classList.toggle("tool-running", !record.done);
+    setMessageState(record.element, record.done ? "done" : "thinking");
+  }
+
+  function updateStoredToolMessage(toolCallId, toolName, text, state) {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const item = messages[index];
+      if (item.role !== "tool") continue;
+      if (item.toolCallId === toolCallId || normalizedStoredToolName(item.text) === toolName) {
+        item.text = text;
+        item.state = state;
+        item.toolCallId = toolCallId;
+        return;
+      }
+    }
+    messages.push({ role: "tool", text, state, toolCallId });
+  }
+
+  function dedupeToolMessages(items) {
+    const result = [];
+    const toolIndexes = new Map();
+    for (const item of items) {
+      if (item.role !== "tool") {
+        result.push(item);
+        continue;
+      }
+
+      const name = normalizedStoredToolName(item.text);
+      if (name === "tool" && item.text.includes("调用工具")) continue;
+      const key = item.toolCallId || name;
+      const existingIndex = toolIndexes.get(key);
+      if (existingIndex === undefined) {
+        toolIndexes.set(key, result.length);
+        result.push(item);
+        continue;
+      }
+
+      if (item.state === "done" || item.text.includes("结果：")) {
+        result[existingIndex] = item;
+      }
+    }
+    return result;
+  }
+
+  function parseStoredToolText(text) {
+    return {
+      name: normalizedStoredToolName(text),
+      args: extractStoredSection(text, "参数") || "{}",
+      result: extractStoredSection(text, "结果"),
+    };
+  }
+
+  function normalizedToolName(streamEvent) {
+    const explicitName = streamEvent.name && streamEvent.name !== "tool" ? streamEvent.name : "";
+    return explicitName || inferToolName(streamEvent);
+  }
+
+  function normalizedStoredToolName(text) {
+    const match = text.match(/(?:调用工具|工具完成)[:：\s]+([^\n\s]+)/);
+    return match?.[1] || "tool";
+  }
+
+  function extractStoredSection(text, title) {
+    const match = text.match(new RegExp(`${title}[:：]([\\s\\S]*?)(?=\\n(?:参数|结果)[:：]|$)`));
+    return match?.[1]?.trim() || "";
+  }
+
+  function hashText(text) {
+    let hash = 0;
+    for (let index = 0; index < text.length; index += 1) {
+      hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+    }
+    return hash.toString(36);
+  }
+
+  function stableToolCallId(streamEvent, toolName) {
+    if (streamEvent.tool_call_id) return streamEvent.tool_call_id;
+    const argsKey = streamEvent.args ? JSON.stringify(streamEvent.args) : streamEvent.content || "";
+    return `${toolName}:${argsKey}`;
+  }
+
+  function inferToolName(streamEvent) {
+    const content = streamEvent.content || "";
+    const match = content.match(/(?:调用工具|工具完成)[:：\s]+([A-Za-z0-9_:-]+)/);
+    return match?.[1] || streamEvent.name || "tool";
+  }
+
+  function formatToolValue(value, emptyText) {
+    if (value === null || value === undefined) return emptyText;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed || emptyText;
+    }
+    if (Array.isArray(value) && !value.length) return emptyText;
+    if (typeof value === "object" && !Object.keys(value).length) return emptyText;
+    return formatJson(value);
+  }
+
+  function formatJson(value) {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (error) {
+      return String(value);
     }
   }
 

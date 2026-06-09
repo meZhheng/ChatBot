@@ -2,7 +2,7 @@ import sqlite3
 
 from langgraph.checkpoint.base import empty_checkpoint
 
-from agent.sqlite_checkpointer import SQLiteCheckpointSaver
+from agent.checkpointer import SQLiteCheckpointSaver
 
 
 def test_sqlite_checkpointer_persists_checkpoint_across_instances():
