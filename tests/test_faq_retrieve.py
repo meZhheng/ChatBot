@@ -91,10 +91,10 @@ def test_service_merge_hits_uses_rrf_scores():
 
     merged = service._merge_hits(bm25_hits, vector_hits)
 
-    assert merged[first["faq_id"]]["score"] == round(1 / 61 + 1 / 62, 6)
-    assert merged[second["faq_id"]]["score"] == round(1 / 62 + 1 / 61, 6)
-    assert merged[first["faq_id"]]["normalized_bm25_score"] == 1 / 61
-    assert merged[first["faq_id"]]["normalized_vector_score"] == 1 / 62
+    assert merged[first["faq_id"]]["score"] == round(service._rrf_score(1) + service._rrf_score(2), 6)
+    assert merged[second["faq_id"]]["score"] == round(service._rrf_score(2) + service._rrf_score(1), 6)
+    assert merged[first["faq_id"]]["normalized_bm25_score"] == service._rrf_score(1)
+    assert merged[first["faq_id"]]["normalized_vector_score"] == service._rrf_score(2)
 
 
 def test_customer_faq_retrieve_endpoint_returns_answer_only_flow():

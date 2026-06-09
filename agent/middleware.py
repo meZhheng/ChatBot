@@ -122,15 +122,12 @@ def monitor_tool(
     request: ToolCallRequest,
     hanlder: Callable[[ToolCallRequest], ToolMessage | Command]
 ):
-    logger.info(f"[工具调用]执行工具：{request.tool_call['name']}")
-    logger.info(f"[工具调用]传入参数：{request.tool_call['args']}")
-
     try:
         result = hanlder(request)
-        logger.info(f"[工具调用]工具{request.tool_call['name']}调用成功")
+        logger.info(f"[工具调用]工具{request.tool_call['name']} | 传入参数：{request.tool_call['args']} 调用成功")
         return result
     except Exception as e:
-        logger.error(f"工具{request.tool_call['name']}调用失败，原因：{str(e)}")
+        logger.error(f"工具{request.tool_call['name']} | 传入参数：{request.tool_call['args']} 调用失败，原因：{str(e)}")
         raise e
 
 @dynamic_prompt

@@ -13,5 +13,9 @@ def get_agent_service(request: Request):
     return request.app.state.agent_service
 
 
+def get_chat_orchestrator(request: Request):
+    return request.app.state.chat_orchestrator
+
+
 def get_wecom_client(request: Request):
     return request.app.state.wecom_client

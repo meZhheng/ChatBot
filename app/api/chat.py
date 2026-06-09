@@ -4,13 +4,12 @@ import re
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.core.dependencies import get_agent_service
+from app.core.dependencies import get_agent_service, get_chat_orchestrator
 from app.schemas.chat import ChatRequest
 
 
 router = APIRouter()
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
-
 
 @router.post("/api/chat")
 def chat(payload: ChatRequest, request: Request):
@@ -21,11 +20,11 @@ def chat(payload: ChatRequest, request: Request):
     if not SESSION_ID_PATTERN.fullmatch(session_id):
         raise HTTPException(status_code=400, detail="session_id 格式无效。")
 
-    agent_service = get_agent_service(request)
+    chat_orchestrator = get_chat_orchestrator(request)
 
     def stream_reply():
         try:
-            for event in agent_service.execute_stream(query, session_id):
+            for event in chat_orchestrator.execute_stream(query, session_id):
                 if event:
                     yield json.dumps(event, ensure_ascii=False) + "\n"
         except Exception as e:

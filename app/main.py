@@ -9,6 +9,7 @@ from agent.rag.rag_service import RagService
 from app.api import admin_faq, admin_rag, chat, faq, pages
 from app.api.platforms import wecom
 from app.core.config import DEFAULT_SQLITE_PATH, get_wecom_config
+from app.services.chat_orchestrator import ChatOrchestrator
 from app.services.wecom import WeComClient
 from faq.service import FaqService
 
@@ -23,12 +24,14 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         rag_service = RagService(db_path)
         faq_service = FaqService(rag_service.sqlite)
         agent_service = AgentService(rag_service.sqlite)
+        chat_orchestrator = ChatOrchestrator(agent_service=agent_service, faq_service=faq_service)
         wecom_client = WeComClient(get_wecom_config())
 
         app.state.sqlite = rag_service.sqlite
         app.state.rag_service = rag_service
         app.state.faq_service = faq_service
         app.state.agent_service = agent_service
+        app.state.chat_orchestrator = chat_orchestrator
         app.state.wecom_client = wecom_client
 
         try:

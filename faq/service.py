@@ -9,6 +9,7 @@ from langchain_chroma import Chroma
 from langchain_community.embeddings import DashScopeEmbeddings
 
 from agent.utils.config_handler import get_env, rag_config
+from agent.utils.logger_handler import logger
 
 FAQ_STATUSES = {"active", "disabled", "deleted"}
 
@@ -348,8 +349,16 @@ class FaqService:
     def retrieve(self, query: str, top_k: int = 5, category: str | None = None, include_disabled: bool = False) -> list[dict]:
         query = self._clean_required(query)
         top_k = self._clamp(top_k, 1, 20)
+        logger.info(
+            f"[FAQ检索]开始检索 query={query!r} top_k={top_k} category={category or '-'} include_disabled={include_disabled}"
+        )
+
         bm25_hits = self._retrieve_bm25(query, top_k=top_k * 4, category=category, include_disabled=include_disabled)
         vector_hits = self._retrieve_vector(query, top_k=top_k * 4, category=category, include_disabled=include_disabled)
+        logger.debug(
+            f"[FAQ检索]召回完成 query={query!r} bm25_hits={len(bm25_hits)} vector_hits={len(vector_hits)}"
+        )
+
         merged = self._merge_hits(bm25_hits, vector_hits)
         results = sorted(
             merged.values(),
@@ -369,6 +378,17 @@ class FaqService:
             ).fetchall()}
             for item in results:
                 item["hit_count"] = int(refreshed.get(item["faq_id"], item["hit_count"]))
+
+            top_hit = results[0]
+            logger.info(
+                "[FAQ检索]命中结果 "
+                f"query={query!r} count={len(results)} top_faq_id={top_hit['faq_id']} "
+                f"score={top_hit['score']} sources={','.join(top_hit['sources'])} "
+                f"matched_doc_type={top_hit['matched_doc_type']} matched_question={top_hit['matched_question']!r}"
+            )
+            logger.debug(f"[FAQ检索]结果详情 query={query!r} results={self._loggable_results(results)}")
+        else:
+            logger.info(f"[FAQ检索]未命中 query={query!r}")
 
         return results
 
@@ -514,7 +534,8 @@ class FaqService:
     def _retrieve_vector(self, query: str, top_k: int, category: str | None, include_disabled: bool) -> list[dict]:
         try:
             results = self.vector_store.similarity_search_with_score(query, k=top_k)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[FAQ检索]向量召回失败 query={query!r} reason={e}")
             return []
 
         hits = []
@@ -579,8 +600,22 @@ class FaqService:
             item["sources"] = sorted(item["sources"])
         return merged
 
-    def _rrf_score(self, rank: int, k: int = 1) -> float:
+    def _rrf_score(self, rank: int, k: int = 60) -> float:
         return 1.0 / (k + rank)
+
+    def _loggable_results(self, results: list[dict]) -> list[dict]:
+        return [
+            {
+                "rank": rank,
+                "faq_id": item["faq_id"],
+                "score": item["score"],
+                "sources": item["sources"],
+                "matched_doc_type": item["matched_doc_type"],
+                "matched_question": item["matched_question"],
+                "category": item["category"],
+            }
+            for rank, item in enumerate(results, start=1)
+        ]
 
     def _result_from_hit(self, hit: dict) -> dict:
         return {
