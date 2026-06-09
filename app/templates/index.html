@@ -26,12 +26,16 @@
         </div>
 
         <div class="chat-toolbar" aria-label="会话管理">
-          <div>
+          <div class="session-control">
             <span class="toolbar-kicker">当前会话</span>
-            <strong id="sessionLabel">载入中</strong>
+            <div class="session-row">
+              <select id="sessionSelect" aria-label="选择会话"></select>
+              <strong id="sessionLabel">载入中</strong>
+            </div>
           </div>
           <div class="toolbar-actions">
             <button id="newSessionButton" class="ghost-button" type="button">新会话</button>
+            <button id="deleteSessionButton" class="ghost-button danger-button" type="button">删除会话</button>
             <button id="clearChatButton" class="ghost-button" type="button">清空显示</button>
           </div>
         </div>

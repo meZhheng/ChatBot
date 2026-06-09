@@ -6,7 +6,7 @@ qwen:
 storage:
   chroma_persist_dir: data/chroma
   sqlite_path: data/sqlite/knowledge_base.sqlite
-  history_store: memory/chat_history/{session_id}.json
+  history_store: agent/memory/sessions/{session_id}.json
 
 vector_store:
   collection_name: knowledge_base_documents

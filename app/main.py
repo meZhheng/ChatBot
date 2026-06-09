@@ -20,7 +20,7 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
         rag_service = RagService(db_path)
-        agent_service = AgentService()
+        agent_service = AgentService(rag_service.sqlite)
         wecom_client = WeComClient(get_wecom_config())
 
         app.state.sqlite = rag_service.sqlite

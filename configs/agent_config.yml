@@ -6,3 +6,11 @@ tools:
   tavily:
     max_results: 5
     topic: general
+
+memory:
+  max_messages_before_compression: 40
+  max_tokens_before_compression: 8000
+  keep_recent_messages: 20
+
+stream:
+  max_tool_result_chars: 1200
