@@ -10,7 +10,10 @@ from app.api import admin_faq, admin_rag, chat, faq, pages
 from app.api.platforms import wecom
 from app.core.config import DEFAULT_SQLITE_PATH, get_wecom_config
 from app.services.chat_orchestrator import ChatOrchestrator
+from app.services.chat_runtime import ChatRuntimeService
+from app.services.conversation_history import ConversationHistoryStore
 from app.services.wecom import WeComClient
+from app.services.wecom_chat import WeComChatService
 from faq.service import FaqService
 
 
@@ -25,14 +28,24 @@ def create_app(sqlite_path: str | Path = DEFAULT_SQLITE_PATH) -> FastAPI:
         faq_service = FaqService(rag_service.sqlite)
         agent_service = AgentService(rag_service.sqlite)
         chat_orchestrator = ChatOrchestrator(agent_service=agent_service, faq_service=faq_service)
+        history_store = ConversationHistoryStore(rag_service.sqlite)
+        chat_runtime = ChatRuntimeService(chat_orchestrator=chat_orchestrator, history_store=history_store)
         wecom_client = WeComClient(get_wecom_config())
+        wecom_chat_service = WeComChatService(
+            wecom_client=wecom_client,
+            chat_runtime=chat_runtime,
+            history_store=history_store,
+        )
 
         app.state.sqlite = rag_service.sqlite
         app.state.rag_service = rag_service
         app.state.faq_service = faq_service
         app.state.agent_service = agent_service
         app.state.chat_orchestrator = chat_orchestrator
+        app.state.conversation_history = history_store
+        app.state.chat_runtime = chat_runtime
         app.state.wecom_client = wecom_client
+        app.state.wecom_chat_service = wecom_chat_service
 
         try:
             yield

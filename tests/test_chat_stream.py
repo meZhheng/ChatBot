@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from agent.bot import AgentService
 from app.api.chat import router
 from app.services.chat_orchestrator import ChatOrchestrator
+from app.services.chat_runtime import ChatRuntimeService
 
 
 class FakeAgentService:
@@ -71,6 +72,7 @@ def make_client(service, faq_service=None):
         agent_service=service,
         faq_service=faq_service or FakeFaqService(),
     )
+    app.state.chat_runtime = ChatRuntimeService(app.state.chat_orchestrator)
     app.include_router(router)
     return TestClient(app)
 
@@ -127,6 +129,26 @@ def test_chat_returns_faq_hit_without_calling_agent():
     assert events[4]["metadata"]["faq_id"] == "faq-1"
     assert service.calls == []
     assert faq_service.calls == [("hello", 3, None)]
+
+
+def test_chat_can_return_complete_json_response():
+    service = FakeAgentService()
+    faq_service = FakeFaqService([faq_result(answer="这是 FAQ 答案。", score=0.032522)])
+    client = make_client(service, faq_service)
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "hello", "session_id": "chat-1", "user_id": "user-1", "stream": False},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_id"] == "chat-1"
+    assert data["user_id"] == "user-1"
+    assert data["role"] == "assistant"
+    assert data["content"] == "这是 FAQ 答案。"
+    assert data["metadata"]["route"] == "faq"
+    assert service.calls == []
 
 
 def test_chat_accepts_real_faq_service_list_results():

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
-from app.core.dependencies import get_wecom_client
+from app.core.dependencies import get_wecom_chat_service, get_wecom_client
 from app.schemas.platforms import WeComSendMessageRequest, WeComSendMessageResponse
 from app.services.wecom import (
     WeComClientError,
@@ -36,6 +36,7 @@ def verify_callback(
 @router.post("/callback", response_class=PlainTextResponse)
 async def receive_callback(
     request: Request,
+    background_tasks: BackgroundTasks,
     msg_signature: str = Query(...),
     timestamp: str = Query(...),
     nonce: str = Query(...),
@@ -47,7 +48,7 @@ async def receive_callback(
 
     wecom_client = get_wecom_client(request)
     try:
-        wecom_client.parse_callback_message(msg_signature, timestamp, nonce, body)
+        incoming = wecom_client.parse_callback_message(msg_signature, timestamp, nonce, body)
     except WeComConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except WeComEncryptedCallbackUnsupported as exc:
@@ -57,6 +58,8 @@ async def receive_callback(
     except WeComClientError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    wecom_chat_service = get_wecom_chat_service(request)
+    wecom_chat_service.schedule_message(incoming, background_tasks)
     return PlainTextResponse("success")
 
 

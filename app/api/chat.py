@@ -1,44 +1,37 @@
-import json
-import re
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.core.dependencies import get_agent_service, get_chat_orchestrator
-from app.schemas.chat import ChatRequest
+from app.core.dependencies import get_agent_service, get_chat_runtime
+from app.schemas.chat import ChatRequest, ChatResponse
+from app.services.chat_runtime import SESSION_ID_PATTERN
 
 
 router = APIRouter()
-SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 
-@router.post("/api/chat")
+
+@router.post("/api/chat", response_model=ChatResponse | None)
 def chat(payload: ChatRequest, request: Request):
-    query = payload.message.strip()
-    session_id = payload.session_id.strip()
-    if not query:
-        raise HTTPException(status_code=400, detail="消息不能为空。")
-    if not SESSION_ID_PATTERN.fullmatch(session_id):
-        raise HTTPException(status_code=400, detail="session_id 格式无效。")
-
-    chat_orchestrator = get_chat_orchestrator(request)
-
-    def stream_reply():
-        try:
-            for event in chat_orchestrator.execute_stream(query, session_id):
-                if event:
-                    yield json.dumps(event, ensure_ascii=False) + "\n"
-        except Exception as e:
-            yield json.dumps(
-                {
-                    "type": "error",
-                    "session_id": session_id,
-                    "role": "assistant",
-                    "content": f"抱歉，回复生成失败：{e}",
-                },
-                ensure_ascii=False,
-            ) + "\n"
-
-    return StreamingResponse(stream_reply(), media_type="application/x-ndjson; charset=utf-8")
+    chat_runtime = get_chat_runtime(request)
+    try:
+        chat_runtime.validate(message=payload.message, session_id=payload.session_id)
+        if payload.stream:
+            return StreamingResponse(
+                chat_runtime.stream_ndjson(
+                    message=payload.message,
+                    session_id=payload.session_id,
+                    user_id=payload.user_id,
+                    channel="web",
+                ),
+                media_type="application/x-ndjson; charset=utf-8",
+            )
+        return chat_runtime.complete(
+            message=payload.message,
+            session_id=payload.session_id,
+            user_id=payload.user_id,
+            channel="web",
+        ).as_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete("/api/chat/sessions/{session_id}")
